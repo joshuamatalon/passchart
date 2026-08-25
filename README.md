@@ -25,36 +25,47 @@ Two ways to enter data:
 
 ## Getting it onto a phone
 
-This is the part the artifact could not do. **Do not double-click `index.html`** — a
-home-screen app requires the files to be served over http/https. Pick one:
+**It is live: <https://joshuamatalon.github.io/passchart/>**
 
-### Option A — GitHub Pages (free, permanent, recommended)
+Open that on the phone, then:
+
+- **iPhone** — in Safari: Share → **Add to Home Screen**
+- **Android** — in Chrome: menu → **Install app**
+
+You get an icon, no browser bars, and it opens with no internet and no Claude
+account. Nothing to sign into.
+
+### First run
+
+The app ships with a generic roster (`Player 1..15`) and no team name, because the
+deployed page is public and baking one team's real names into it would publish them
+to anyone with the URL. Setup takes about fifteen seconds:
+
+1. **Roster** tab → paste the whole list into **Paste names** (one per line; put the
+   jersey number first if you want it, e.g. `7 Riley`) → **Fill roster** → **Save roster**
+2. **Setup** tab → type the team name
+
+Those names are then stored only on that phone, which is where the app keeps
+everything else anyway.
+
+### Pushing an update
 
 ```bash
-cd C:\Users\joshu\passchart
-gh repo create passchart --public --source=. --remote=origin --push
-gh api -X POST repos/:owner/passchart/pages -f source[branch]=main -f source[path]=/
+git add -A && git commit -m "..." && git push
 ```
 
-Then open `https://<your-github-username>.github.io/passchart/` on the phone.
+Pages rebuilds in about a minute. **Bump the `CACHE` string in `sw.js`** whenever
+`index.html` changes, or phones that already installed it keep serving the version
+they first cached.
 
-### Option B — try it on this machine first
+### Running it locally
 
 ```bash
-cd C:\Users\joshu\passchart
 python -m http.server 8777 --bind 127.0.0.1
 ```
 
-Open `http://127.0.0.1:8777/`. Works for testing on the PC; a phone on the same
-Wi-Fi can reach it via this machine's LAN IP, but iOS will not offer "install"
-over plain http from another host — use Option A for the real thing.
-
-### Then install it
-
-- **iPhone** — open the URL in Safari → Share → **Add to Home Screen**
-- **Android** — open in Chrome → menu → **Install app**
-
-You get an icon, no browser bars, and it opens with no internet and no Claude account.
+Then <http://127.0.0.1:8777/>. Service workers need http/https, so **do not
+double-click `index.html`** — that cannot give you a home-screen app.
 
 ---
 
@@ -229,15 +240,6 @@ editor and reload.
 
 ---
 
-## Pushing an update to an installed phone
-
-Change `index.html`, then **bump the `CACHE` string in `sw.js`** (`passchart-v3` →
-`v4`) and redeploy. Without that bump, installed phones keep serving the version they
-first cached. The shell also revalidates in the background, so a phone picks up a new
-version on the open after it reconnects.
-
----
-
 ## Known limits
 
 - **Photo recognition accuracy on real handwriting is unmeasured.** See above.
@@ -246,7 +248,11 @@ version on the open after it reconnects.
   today means Save backup → send the file → Restore. Real sync needs a server and is a
   much larger job.
 - **The double-click-the-file path is untested** and cannot give you a home-screen
-  app regardless — service workers require http/https. Host it.
+  app regardless — service workers require http/https. Use the live URL.
+- **Everything above was verified in desktop Chrome** at emulated phone widths and,
+  since deploying, against the live HTTPS site. It has not been opened on a physical
+  iPhone or Android — layout is measured, but type will render differently (SF Pro
+  versus Segoe), and the iOS install flow itself is untested.
 - **HEIC:** the app re-encodes every picked image through a canvas, which converts
   iPhone HEIC to JPEG on any browser that can decode HEIC (Safari can). This is the
   right fix, but it has not been tested against an actual iPhone photo.
