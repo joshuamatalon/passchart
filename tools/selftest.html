@@ -160,11 +160,51 @@ async function waitApp(){
     ok('header ribbon is 12px', Math.abs(hHdr - 12) < 1.5, hHdr.toFixed(1) + 'px');
   }
 
-  grp('7. tap targets big enough to hit without looking');
+  grp('7. tap targets, and no accidental zoom on a phone');
   const gb = F().contentDocument.querySelector('.grades .gb');
   const rect = gb.getBoundingClientRect();
   ok('grade button >= 44px tall (Apple HIG minimum)', rect.height>=44, rect.height.toFixed(0)+'px');
   ok('grade button >= 44px wide', rect.width>=44, rect.width.toFixed(0)+'px');
+
+  /* Fast grade entry reads as double-tap-to-zoom unless the element opts out.
+     maximum-scale in the viewport does NOT do this - iOS has ignored it since
+     iOS 10. touch-action:manipulation is what actually disables it. These
+     assert the mechanism; the gesture itself can only be confirmed on a phone. */
+  {
+    const W = F().contentWindow, D = F().contentDocument;
+    const ta = (el) => W.getComputedStyle(el).touchAction;
+    ok('grade key opts out of double-tap zoom', ta(gb) === 'manipulation', ta(gb));
+    const nav0 = D.querySelector('nav.tabs button');
+    ok('nav button opts out too', ta(nav0) === 'manipulation', ta(nav0));
+    ok('body opts out', ta(D.body) === 'manipulation', ta(D.body));
+
+    /* iOS zooms the page whenever a focusable field under 16px takes focus.
+       Sweep every view, because the small ones live on Roster and Setup, not
+       on the screen this group happens to be sitting on. */
+    const small = [];
+    let checked = 0;
+    const openSession = PC.view.openId;
+    for (const view of ['practices', 'season', 'roster', 'setup']) {
+      PC.go(view);
+      await sleep(220);
+      for (const el of D.querySelectorAll('input, textarea, select')) {
+        /* a field nobody can tap cannot trigger a focus zoom - the file input
+           is display:none and is only ever clicked from script */
+        if (!el.offsetParent && W.getComputedStyle(el).position !== 'fixed') continue;
+        checked++;
+        const px = parseFloat(W.getComputedStyle(el).fontSize);
+        if (px < 16) small.push((el.className || el.tagName).trim() + ' @' + px + 'px');
+      }
+    }
+    PC.go('practices', openSession);
+    await sleep(250);
+    ok('no focusable field under 16px (iOS focus-zoom threshold)', small.length === 0,
+       small.length ? [...new Set(small)].join(', ') : checked + ' fields swept across 4 views');
+
+    const vp = (D.querySelector('meta[name=viewport]') || {}).content || '';
+    ok('viewport still allows pinch-zoom (accessibility)',
+       !/maximum-scale|user-scalable\s*=\s*no/.test(vp), vp);
+  }
 
   /* ---------------------------------------------------------------- */
   grp('8. persistence across a full reload');
