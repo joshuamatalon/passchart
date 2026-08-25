@@ -141,14 +141,33 @@ async function waitApp(){
   F().style.width = '390px'; await sleep(250);
 
   /* ---------------------------------------------------------------- */
-  grp('6. tap targets big enough to hit without looking');
+  grp('6. an empty ribbon occupies exactly the space a full one will');
+  /* A ribbon with no data must reserve the identical height, or every row
+     collapses the instant the first grade lands and the next tap misses.
+     This caught a real regression: an `.empty` panel rule also matched
+     `class="ribbon empty"` and padded every empty ribbon to 64px. */
+  {
+    const rows6 = [...F().contentDocument.querySelectorAll('.prow')];
+    const lastRow = rows6[rows6.length - 1];
+    const rib = lastRow && lastRow.querySelector('.ribbon');
+    const isEmpty = rib && rib.classList.contains('empty');
+    const hEmpty = rib ? rib.getBoundingClientRect().height : -1;
+    ok('a player row ribbon exists', !!rib);
+    ok('empty ribbon is 7px, not padded by a stray rule', Math.abs(hEmpty - 7) < 1.5,
+       hEmpty.toFixed(1) + 'px' + (isEmpty ? ' (empty)' : ' (has data)'));
+    const hdr = F().contentDocument.querySelector('.panel .ribbon');
+    const hHdr = hdr ? hdr.getBoundingClientRect().height : -1;
+    ok('header ribbon is 12px', Math.abs(hHdr - 12) < 1.5, hHdr.toFixed(1) + 'px');
+  }
+
+  grp('7. tap targets big enough to hit without looking');
   const gb = F().contentDocument.querySelector('.grades .gb');
   const rect = gb.getBoundingClientRect();
   ok('grade button >= 44px tall (Apple HIG minimum)', rect.height>=44, rect.height.toFixed(0)+'px');
   ok('grade button >= 44px wide', rect.width>=44, rect.width.toFixed(0)+'px');
 
   /* ---------------------------------------------------------------- */
-  grp('7. persistence across a full reload');
+  grp('8. persistence across a full reload');
   PC.S.sessions=[]; PC.commit();
   const mk=(id,date,label)=>({id,date,label,scale:3,counts:{},sheets:0,log:[]});
   ['2026-01-05','2026-01-12','2026-01-19'].forEach((d,i)=>{
@@ -176,7 +195,7 @@ async function waitApp(){
   ok('revision counter survived', got.rev===expect.rev, got.rev+' vs '+expect.rev);
 
   /* ---------------------------------------------------------------- */
-  grp('8. survives losing localStorage (IndexedDB rescue)');
+  grp('9. survives losing localStorage (IndexedDB rescue)');
   const stash = localStorage.getItem(LS_KEY);
   F().contentWindow.localStorage.removeItem(LS_KEY);
   ok('localStorage wiped', !F().contentWindow.localStorage.getItem(LS_KEY));
@@ -187,7 +206,7 @@ async function waitApp(){
      PC.S.sessions.reduce((a,s)=>a+PC.tally(PC.teamCounts(s),3).att,0)===expect.att);
 
   /* ---------------------------------------------------------------- */
-  grp('9. CSV export');
+  grp('10. CSV export');
   const csv = PC.buildCSV();
   const lines = csv.split('\n');
   ok('has a header row', /^Date,Practice,Number,Player/.test(lines[0]), lines[0].slice(0,42));
@@ -198,7 +217,7 @@ async function waitApp(){
   ok('no malformed rows', bad.length===0, bad.length+' bad');
 
   /* ---------------------------------------------------------------- */
-  grp('10. backup / restore round trip');
+  grp('11. backup / restore round trip');
   const snapshot = JSON.stringify(PC.S);
   const attBefore = PC.S.sessions.reduce((a,s)=>a+PC.tally(PC.teamCounts(s),3).att,0);
   PC.S.sessions = []; PC.commit();
@@ -210,7 +229,7 @@ async function waitApp(){
      PC.S.sessions.reduce((a,s)=>a+PC.tally(PC.teamCounts(s),3).att,0)===attBefore);
 
   /* ---------------------------------------------------------------- */
-  grp('11. offline behaviour');
+  grp('12. offline behaviour');
   const win = F().contentWindow;
   Object.defineProperty(win.navigator,'onLine',{configurable:true,get:()=>false});
   let calls=0; win.fetch = async()=>{ calls++; throw new Error('network'); };
@@ -233,7 +252,7 @@ async function waitApp(){
   for(const it of q) await PC.Store.queueDel(it.id);
 
   /* ---------------------------------------------------------------- */
-  grp('12. cleanup — put your real season back');
+  grp('13. cleanup — put your real season back');
   /* Restoring localStorage alone is NOT enough. The app keeps an IndexedDB
      mirror and, on boot, whichever store has the higher revision wins - so a
      raw localStorage write loses to the test data still sitting in IDB.

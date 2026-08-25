@@ -179,6 +179,39 @@ mirror would win on revision and hand back the test data.
 
 ---
 
+## Design
+
+The look is a broadcast stat card: **the numbers are the artwork**, the grade ramp is the
+only place colour is allowed to be loud, and everything else recedes so a glance in a bright
+gym lands on the figure that matters.
+
+Everything is driven by tokens at the top of the `<style>` block — colour, a 4px spacing
+rhythm, and one type scale. Change a token, not a rule.
+
+Decisions worth not undoing:
+
+- **The UI accent is deliberately quiet.** A saturated chrome colour competes with the
+  green/amber/orange/red ramp and makes the distribution bars harder to read at speed.
+- **The ground is near-neutral, not navy.** Navy fights the amber and orange and turns the
+  grade-key tints muddy.
+- **Grade keys use solid hand-mixed tints, not alpha washes.** An 18% wash of colour over a
+  blue-black reads as brown.
+- **One hero figure per screen.** The passer rating is 42px; everything else is 17px or
+  smaller. When all four stats were the same size, a glance told you nothing.
+- **Destructive actions stay quiet until used.** A permanently red Delete button was the
+  loudest thing on a screen whose whole job is to make one number obvious.
+- **Numbers are system-sans with `tabular-nums`**, not monospace. They align in columns,
+  never jitter while counting, and look far better at display sizes.
+- **Nothing may change height or order during entry.** See the tap-stability note above —
+  this is a correctness rule wearing a design hat, and the self-test enforces it.
+
+One trap, learned the hard way: `class="ribbon empty"` and a panel styled `.empty` collide.
+A padding rule written for the empty-state panel silently inflated every empty ribbon from
+7px to 64px, which reintroduced the row-jump bug on the first tap of a fresh practice. The
+empty-state class is now `.emptystate`, and the self-test asserts ribbon heights directly.
+
+---
+
 ## Files
 
 ```
