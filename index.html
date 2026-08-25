@@ -1,0 +1,1673 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<title>Pass Chart</title>
+<meta name="description" content="Volleyball serve-receive passing tracker. Works offline.">
+<meta name="theme-color" content="#101426">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pass Chart">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<style>
+:root{
+  --bg:#101426; --panel:#181E36; --panel2:#212A48; --line:#2C3659;
+  --text:#E9EEFB; --dim:#8B96B8; --accent:#6E7BFF; --ok:#3DDC97; --bad:#EA4C60;
+  --g3:#3DDC97; --g2:#F5C044; --g1:#F0844B; --g0:#EA4C60; --g4hi:#9BD65C;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif;
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);color:var(--text);font-family:var(--sans);
+  min-height:100vh;overscroll-behavior-y:contain;
+  -webkit-user-select:none;user-select:none;
+}
+input,textarea,select{-webkit-user-select:text;user-select:text}
+button{font-family:var(--sans);cursor:pointer;border:none;background:none;color:inherit}
+
+/* ---------- header ---------- */
+header{
+  position:sticky;top:0;z-index:20;background:var(--bg);
+  border-bottom:1px solid var(--line);
+  padding:calc(env(safe-area-inset-top,0px) + 14px) 14px 10px;
+}
+.hrow{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.brand{font-family:var(--mono);font-size:19px;font-weight:700;letter-spacing:-.5px}
+.sub{font-size:10px;color:var(--dim);letter-spacing:1.4px;text-transform:uppercase}
+.badge{margin-left:auto;font-family:var(--mono);font-size:11px;display:flex;align-items:center;gap:8px}
+.pill{font-family:var(--mono);font-size:10px;padding:3px 7px;border-radius:20px;border:1px solid var(--line);color:var(--dim)}
+.pill.off{color:#F5C044;border-color:#4A3F22;background:#2A2416}
+.pill.err{color:var(--bad);border-color:#4A2233;background:#2A1620}
+
+/* ---------- layout ---------- */
+main{padding:14px;max-width:760px;margin:0 auto;padding-bottom:calc(96px + var(--safe-b))}
+/* minmax(0,1fr) is load-bearing. A bare `auto` grid column sizes to
+   min-content, so one nowrap child (the undo chip strip) drags every panel
+   wider than the phone and the whole page scrolls sideways. Measured at
+   386px: 407px wide before, 371px after. */
+.stack{display:grid;gap:12px;grid-template-columns:minmax(0,1fr)}
+.row>*{min-width:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+.panel.tight{padding:8px}
+.row{display:flex;gap:8px;align-items:center}
+.spread{display:flex;justify-content:space-between;align-items:baseline}
+h2.sec{font-size:14px;margin:0 0 6px}
+p.note{font-size:13px;color:var(--dim);margin:6px 0}
+p.note.tiny{font-size:11px}
+hr.sep{border:none;border-top:1px solid var(--line);margin:12px 0}
+
+/* ---------- buttons ---------- */
+.btn{padding:11px 14px;border-radius:10px;font-size:14px;font-weight:600;
+     background:var(--panel2);color:var(--text);border:1px solid var(--line);
+     display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn.solid{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn.quiet{background:transparent;color:var(--dim)}
+.btn.danger{background:transparent;color:var(--bad);border-color:#4A2233}
+.btn.wide{width:100%}
+.btn.big{padding:15px}
+.btn[disabled]{opacity:.45;pointer-events:none}
+
+/* ---------- inputs ---------- */
+.inp{background:var(--panel2);border:1px solid var(--line);color:var(--text);
+     border-radius:9px;padding:10px;font-size:16px;font-family:var(--sans);width:100%}
+.inp.mono{font-family:var(--mono)}
+.inp.mid{text-align:center}
+textarea.inp{min-height:88px;resize:vertical}
+select.inp{background:var(--panel)}
+label.fld{display:block;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px}
+
+/* ---------- stats ---------- */
+.stats{display:flex;gap:10px;margin-top:14px}
+.stat{flex:1;min-width:64px}
+.stat .v{font-family:var(--mono);font-size:22px;font-weight:700;letter-spacing:-.5px}
+.stat .l{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+
+/* ---------- ribbon ---------- */
+.ribbon{display:flex;overflow:hidden;border-radius:99px}
+.ribbon.empty{background:var(--panel2);border:1px solid var(--line)}
+
+/* ---------- practice card ---------- */
+.card{text-align:left;background:var(--panel);border:1px solid var(--line);
+      border-radius:14px;padding:14px;width:100%;display:block}
+.card .t{font-weight:700;font-size:15px}
+.card .d{font-size:12px;color:var(--dim);font-family:var(--mono);margin-top:2px}
+.card .r{font-family:var(--mono);font-size:24px;font-weight:700}
+
+/* ---------- player rows ---------- */
+.prow{padding:9px 6px;border-bottom:1px solid var(--line)}
+.prow:last-child{border-bottom:none}
+.pname{font-weight:600;font-size:15px}
+.pnum{font-family:var(--mono);color:var(--dim);font-size:12px}
+.patt{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--dim)}
+.prate{font-family:var(--mono);font-size:18px;font-weight:700;min-width:48px;text-align:right}
+
+/* grade buttons: sized for a phone in a loud gym */
+.grades{display:flex;gap:6px;margin-top:8px}
+.gb{flex:1;min-height:54px;border-radius:10px;font-family:var(--mono);
+    font-size:19px;font-weight:700;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;line-height:1.1;border:1px solid}
+.gb .n{font-size:11px;opacity:.85;font-weight:600}
+.gb:active{transform:scale(.95)}
+.gb.g3{color:var(--g3);border-color:#3DDC9755;background:#3DDC9718}
+.gb.g2{color:var(--g2);border-color:#F5C04455;background:#F5C04418}
+.gb.g1{color:var(--g1);border-color:#F0844B55;background:#F0844B18}
+.gb.g0{color:var(--g0);border-color:#EA4C6055;background:#EA4C6018}
+.gb.g4{color:var(--g3);border-color:#3DDC9755;background:#3DDC9718}
+.gb.g3of4{color:var(--g4hi);border-color:#9BD65C55;background:#9BD65C18}
+.gb.clr{flex:0 0 46px;min-height:54px;color:var(--dim);border-color:var(--line);
+        background:transparent;font-size:12px}
+
+/* ---------- tabs / nav ---------- */
+nav.tabs{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--panel);
+     border-top:1px solid var(--line);padding-bottom:var(--safe-b);z-index:20}
+nav.tabs button{flex:1;padding:13px 2px 15px;font-size:12px;font-weight:600;
+     color:var(--dim);border-top:2px solid transparent}
+nav.tabs button.on{color:var(--text);border-top-color:var(--accent)}
+
+.seg{display:flex;gap:8px}
+.seg .btn{flex:1}
+
+/* Undo strip reserves its space permanently. If this box changes height
+   when the first grade lands, every row below it jumps and the next tap
+   hits the wrong target - measured, not hypothetical. */
+.chipstrip{display:flex;gap:5px;flex-wrap:nowrap;overflow:hidden;
+           height:24px;align-items:center;margin-top:8px}
+
+/* active-passer quick bar: entry without scrolling or aiming */
+.quick{position:fixed;left:0;right:0;bottom:calc(50px + var(--safe-b));z-index:19;
+       background:var(--panel);border-top:1px solid var(--line);
+       padding:8px 10px 10px;display:none}
+body.quickon .quick{display:block}
+body.quickon main{padding-bottom:calc(210px + var(--safe-b))}
+.quick .who{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.quick .who .nm{font-weight:700;font-size:15px}
+.quick .who .ct{font-family:var(--mono);font-size:12px;color:var(--dim);margin-left:auto}
+.quick .gr{display:flex;gap:7px}
+.quick .gb{min-height:60px;font-size:22px}
+.prow.active{background:#1E2748;border-radius:10px}
+.ptap{display:flex;align-items:baseline;gap:8px;width:100%;text-align:left;padding:0}
+
+/* ---------- modal ---------- */
+.scrim{position:fixed;inset:0;background:rgba(8,10,20,.85);z-index:40;
+       display:flex;align-items:center;justify-content:center;padding:14px}
+.modal{width:100%;max-width:640px;max-height:86vh;overflow:auto}
+
+/* ---------- season table ---------- */
+.thead{display:flex;font-size:10px;color:var(--dim);text-transform:uppercase;
+       letter-spacing:1px;padding:4px 6px 8px}
+.thead .n{width:50px;text-align:right}
+
+/* ---------- draft review ---------- */
+.draft{background:var(--panel2);border-radius:10px;padding:10px;display:grid;gap:8px}
+.draft .gin{flex:1}
+.draft .gin .lab{font-size:10px;font-family:var(--mono);margin-bottom:3px}
+
+/* ---------- misc ---------- */
+.banner{border-radius:12px;padding:12px;font-size:13px;line-height:1.45}
+.banner.warn{background:#2A2416;border:1px solid #4A3F22;color:#F5C044}
+.banner.bad{background:#2A1620;border:1px solid #4A2233;color:#EA4C60}
+.banner.info{background:#161E3A;border:1px solid #2C3659;color:var(--dim)}
+.log{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.chip{font-family:var(--mono);font-size:11px;padding:3px 7px;border-radius:6px;
+      background:var(--panel2);border:1px solid var(--line);color:var(--dim)}
+.kbd{font-family:var(--mono);background:var(--panel2);padding:2px 6px;border-radius:5px;
+     border:1px solid var(--line);font-size:12px}
+.center{text-align:center}
+.grow{flex:1}
+.hide{display:none !important}
+img.shot{width:100%;border-radius:10px;border:1px solid var(--line)}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   PASS CHART - offline-first volleyball serve-receive tracker
+   Zero dependencies. Single file. Works from disk or as an installed PWA.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------- utils */
+const $ = (s, r) => (r || document).querySelector(s);
+function h(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  const p = props || {};
+  for (const k in p) {
+    const v = p[k];
+    if (v == null || v === false) continue;
+    if (k === "style" && typeof v === "object") Object.assign(e.style, v);
+    else if (k.slice(0, 2) === "on" && typeof v === "function")
+      e.addEventListener(k.slice(2).toLowerCase(), v);
+    else if (k === "class") e.className = v;
+    else if (k === "html") e.innerHTML = v;
+    else e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const kid of kids.flat(Infinity)) {
+    if (kid == null || kid === false || kid === "") continue;
+    e.appendChild(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  }
+  return e;
+}
+const uid = () => Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-3);
+const fmt = (n, d) => (Number.isFinite(n) ? n.toFixed(d == null ? 2 : d) : "—");
+const todayISO = () => {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+};
+const buzz = (ms) => { try { navigator.vibrate && navigator.vibrate(ms || 12); } catch (e) {} };
+const esc = (s) => String(s == null ? "" : s);
+
+/* ---------------------------------------------------------------- model */
+const gradesFor = (scale) => (scale === 4 ? [4, 3, 2, 1, 0] : [3, 2, 1, 0]);
+const gradeClass = (g, scale) =>
+  scale === 4
+    ? { 4: "g4", 3: "g3of4", 2: "g2", 1: "g1", 0: "g0" }[g]
+    : { 3: "g3", 2: "g2", 1: "g1", 0: "g0" }[g];
+const RAMP = {
+  3: { 3: "#3DDC97", 2: "#F5C044", 1: "#F0844B", 0: "#EA4C60" },
+  4: { 4: "#3DDC97", 3: "#9BD65C", 2: "#F5C044", 1: "#F0844B", 0: "#EA4C60" }
+};
+
+function tally(counts, scale) {
+  const gs = gradesFor(scale);
+  let att = 0, pts = 0;
+  for (const g of gs) { const n = (counts && counts[g]) || 0; att += n; pts += n * g; }
+  const top = gs[0];
+  const perfect = (counts && counts[top]) || 0;
+  const good = perfect + ((counts && counts[top - 1]) || 0);
+  const zeros = (counts && counts[0]) || 0;
+  return {
+    att,
+    rating: att ? pts / att : 0,
+    perfectPct: att ? (perfect / att) * 100 : 0,
+    goodPct: att ? (good / att) * 100 : 0,
+    errPct: att ? (zeros / att) * 100 : 0
+  };
+}
+function mergeCounts(a, b) {
+  const out = Object.assign({}, a || {});
+  for (const g in (b || {})) out[g] = (out[g] || 0) + (b[g] || 0);
+  return out;
+}
+function teamCounts(session) {
+  return Object.values(session.counts || {}).reduce((acc, c) => mergeCounts(acc, c), {});
+}
+
+const DEFAULT_ROSTER = ["Leah","Elise","Alana","Claire","Clara","Alyssya","Kelly","Phoebe",
+                        "Kaylee","Lillian","Jillian","Sadie","Aurora","Gia","Lucy"];
+const freshRoster = () => DEFAULT_ROSTER.map((name) => ({ id: uid(), num: "", name }));
+
+/* ============================================================= STORAGE ==
+   Two independent local stores, both on-device, neither needing a network.
+     localStorage  - synchronous, cannot be interrupted, primary
+     IndexedDB     - async mirror, bigger ceiling, survives LS eviction
+   Every save writes BOTH. On boot we read BOTH and keep the higher rev.
+   This is the fix for the practice that vanished: the old build wrote the
+   whole season to a NETWORK-backed store on every tap and swallowed errors.
+   ======================================================================= */
+const LS_KEY = "passchart:v1";
+const DB_NAME = "passchart";
+const DB_STORE = "kv";
+
+const Store = (() => {
+  let lsOK = false, idbOK = false, db = null, lastErr = "";
+
+  try {
+    localStorage.setItem("__pc_probe", "1");
+    localStorage.removeItem("__pc_probe");
+    lsOK = true;
+  } catch (e) { lastErr = "localStorage blocked: " + e.message; }
+
+  function openDB() {
+    return new Promise((res) => {
+      let req;
+      try { req = indexedDB.open(DB_NAME, 1); }
+      catch (e) { lastErr = "indexedDB blocked: " + e.message; return res(null); }
+      req.onupgradeneeded = () => {
+        const d = req.result;
+        if (!d.objectStoreNames.contains(DB_STORE)) d.createObjectStore(DB_STORE);
+      };
+      req.onsuccess = () => { idbOK = true; res(req.result); };
+      req.onerror = () => { lastErr = "indexedDB open failed"; res(null); };
+      req.onblocked = () => res(null);
+      setTimeout(() => res(req.result || null), 2500);
+    });
+  }
+  async function idbGet(key) {
+    if (!db) return null;
+    return new Promise((res) => {
+      try {
+        const tx = db.transaction(DB_STORE, "readonly");
+        const r = tx.objectStore(DB_STORE).get(key);
+        r.onsuccess = () => res(r.result == null ? null : r.result);
+        r.onerror = () => res(null);
+      } catch (e) { res(null); }
+    });
+  }
+  async function idbSet(key, val) {
+    if (!db) return false;
+    return new Promise((res) => {
+      try {
+        const tx = db.transaction(DB_STORE, "readwrite");
+        tx.objectStore(DB_STORE).put(val, key);
+        tx.oncomplete = () => res(true);
+        tx.onerror = () => res(false);
+        tx.onabort = () => res(false);
+      } catch (e) { res(false); }
+    });
+  }
+  async function idbDel(key) {
+    if (!db) return;
+    try { const tx = db.transaction(DB_STORE, "readwrite"); tx.objectStore(DB_STORE).delete(key); } catch (e) {}
+  }
+
+  return {
+    async init() { db = await openDB(); return { lsOK, idbOK, lastErr }; },
+    get health() { return { lsOK, idbOK, lastErr }; },
+
+    /* Synchronous read. localStorage needs no await, so the app can paint
+       on the first frame instead of waiting on IndexedDB - which can stall
+       for seconds if the DB is blocked, and a blank screen in a gym reads
+       as "the app is broken". */
+    loadSync() {
+      if (!lsOK) return null;
+      try {
+        const raw = localStorage.getItem(LS_KEY);
+        return raw ? JSON.parse(raw) : null;
+      } catch (e) { return null; }
+    },
+
+    /* Reads BOTH stores and returns the newer (higher rev). */
+    async load() {
+      let fromLS = null, fromDB = null;
+      if (lsOK) {
+        try { const raw = localStorage.getItem(LS_KEY); if (raw) fromLS = JSON.parse(raw); }
+        catch (e) { lastErr = "localStorage parse failed: " + e.message; }
+      }
+      try { fromDB = await idbGet("state"); } catch (e) {}
+      const a = fromLS && typeof fromLS === "object" ? fromLS : null;
+      const b = fromDB && typeof fromDB === "object" ? fromDB : null;
+      if (a && b) return (b.rev || 0) > (a.rev || 0) ? b : a;
+      return a || b || null;
+    },
+
+    /* Synchronous local write first (cannot be cut off), then async mirror. */
+    saveSync(state) {
+      if (!lsOK) return false;
+      try { localStorage.setItem(LS_KEY, JSON.stringify(state)); return true; }
+      catch (e) { lastErr = "localStorage write failed: " + e.message; return false; }
+    },
+    async saveMirror(state) { return idbSet("state", state); },
+
+    /* photo queue lives in IDB only - blobs are too big for localStorage */
+    async queuePut(item) { return idbSet("q:" + item.id, item); },
+    async queueDel(id) { return idbDel("q:" + id); },
+    async queueAll() {
+      if (!db) return [];
+      return new Promise((res) => {
+        try {
+          const tx = db.transaction(DB_STORE, "readonly");
+          const st = tx.objectStore(DB_STORE);
+          const out = [];
+          const r = st.openCursor();
+          r.onsuccess = () => {
+            const c = r.result;
+            if (!c) return res(out);
+            if (String(c.key).slice(0, 2) === "q:") out.push(c.value);
+            c.continue();
+          };
+          r.onerror = () => res(out);
+        } catch (e) { res([]); }
+      });
+    }
+  };
+})();
+
+/* ============================================================== STATE == */
+const S = {
+  rev: 0,
+  team: "Sanford",
+  scale: 3,
+  roster: freshRoster(),
+  sessions: [],
+  settings: { apiKey: "", proxyUrl: "", model: "claude-sonnet-5" }
+};
+
+let saveState = "idle";       // idle | saving | saved | error
+let savedAt = null;
+let mirrorTimer = null;
+
+function commit(opts) {
+  S.rev = (S.rev || 0) + 1;
+  const ok = Store.saveSync(S);
+  saveState = ok ? "saved" : "error";
+  savedAt = ok ? new Date() : savedAt;
+  clearTimeout(mirrorTimer);
+  mirrorTimer = setTimeout(async () => {
+    const mok = await Store.saveMirror(JSON.parse(JSON.stringify(S)));
+    if (!mok && !ok) { saveState = "error"; paintBadge(); }
+  }, 400);
+  if (!(opts && opts.quiet)) paintBadge();
+  return ok;
+}
+async function flushNow() {
+  const ok = Store.saveSync(S);
+  await Store.saveMirror(JSON.parse(JSON.stringify(S)));
+  saveState = ok ? "saved" : "error";
+  if (ok) savedAt = new Date();
+  paintBadge();
+}
+
+/* ============================================================== VIEWS == */
+const V = { tab: "practices", openId: null };
+
+function ribbon(counts, scale, height) {
+  const gs = gradesFor(scale);
+  const total = gs.reduce((s, g) => s + ((counts && counts[g]) || 0), 0);
+  const hh = height || 10;
+  if (!total) return h("div", { class: "ribbon empty", style: { height: hh + "px" } });
+  return h("div", { class: "ribbon", style: { height: hh + "px" } },
+    gs.map((g) => {
+      const n = (counts && counts[g]) || 0;
+      if (!n) return null;
+      return h("div", {
+        title: n + " x " + g,
+        style: { width: (n / total) * 100 + "%", background: RAMP[scale][g] }
+      });
+    }));
+}
+function stat(label, value) {
+  return h("div", { class: "stat" },
+    h("div", { class: "v" }, value),
+    h("div", { class: "l" }, label));
+}
+
+/* ------------------------------------------------------------- badge -- */
+function paintBadge() {
+  const el = $("#badge");
+  if (!el) return;
+  el.textContent = "";
+  const online = navigator.onLine;
+  if (!online) el.appendChild(h("span", { class: "pill off" }, "OFFLINE OK"));
+  const map = {
+    idle: ["", "var(--dim)"],
+    saving: ["Saving…", "var(--dim)"],
+    saved: [savedAt ? "Saved " + savedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "Saved", "var(--ok)"],
+    error: ["NOT SAVED — tap", "var(--bad)"]
+  };
+  const [txt, col] = map[saveState];
+  if (txt) {
+    el.appendChild(h("button", {
+      style: { color: col, fontFamily: "var(--mono)", fontSize: "11px", padding: "0" },
+      onclick: flushNow
+    }, txt));
+  }
+}
+
+/* -------------------------------------------------------------- shell - */
+function render() {
+  const root = $("#root");
+  root.textContent = "";
+  setQuick(false);   /* viewSession re-arms it if a passer is selected */
+
+  const header = h("header", null,
+    h("div", { class: "hrow" },
+      h("span", { class: "brand" }, "PASS CHART"),
+      h("span", { class: "sub" }, "Serve receive · " + S.team),
+      h("span", { class: "badge", id: "badge" })));
+
+  const main = h("main", null, body());
+
+  const nav = h("nav", { class: "tabs" },
+    [["practices", "Practices"], ["season", "Season"], ["roster", "Roster"], ["setup", "Setup"]]
+      .map(([k, label]) =>
+        h("button", {
+          class: V.tab === k && !V.openId ? "on" : "",
+          onclick: () => { V.openId = null; V.tab = k; render(); }
+        }, label)));
+
+  root.appendChild(header);
+  root.appendChild(main);
+  root.appendChild(nav);
+  paintBadge();
+  storageWarning();
+}
+
+function storageWarning() {
+  const hlth = Store.health;
+  if (hlth.lsOK || hlth.idbOK) return;
+  const m = $("main");
+  if (!m) return;
+  m.insertBefore(
+    h("div", { class: "banner bad", style: { marginBottom: "12px" } },
+      h("strong", null, "This browser is not letting the app save anything. "),
+      "Nothing you enter will survive closing the page. If you opened this by double-clicking the file, " +
+      "serve it over http instead, or add it to your home screen. Details: " + hlth.lastErr),
+    m.firstChild);
+}
+
+function body() {
+  if (V.openId) {
+    const s = S.sessions.find((x) => x.id === V.openId);
+    if (s) return viewSession(s);
+    V.openId = null;
+  }
+  if (V.tab === "practices") return viewPractices();
+  if (V.tab === "season") return viewSeason();
+  if (V.tab === "roster") return viewRoster();
+  return viewSetup();
+}
+
+/* ==================================================== VIEW: PRACTICES == */
+function newSession() {
+  const s = {
+    id: uid(), date: todayISO(), label: "Practice",
+    scale: S.scale, counts: {}, sheets: 0, log: []
+  };
+  S.sessions.unshift(s);
+  commit();
+  V.openId = s.id;
+  render();
+}
+
+function viewPractices() {
+  const wrap = h("div", { class: "stack" });
+  wrap.appendChild(h("button", { class: "btn solid big wide", onclick: newSession }, "+ New practice"));
+
+  if (!S.sessions.length) {
+    wrap.appendChild(h("div", { class: "panel" },
+      h("p", { class: "note", style: { margin: "0" } },
+        "No practices yet. Start one, then tap grades in live — or photograph the sheet afterwards.")));
+    return wrap;
+  }
+
+  for (const s of S.sessions) {
+    const sc = s.scale || S.scale;
+    const tc = teamCounts(s);
+    const t = tally(tc, sc);
+    wrap.appendChild(
+      h("button", { class: "card", onclick: () => { V.openId = s.id; render(); } },
+        h("div", { class: "spread" },
+          h("div", null,
+            h("div", { class: "t" }, s.label || "Practice"),
+            h("div", { class: "d" }, s.date + " · " + t.att + " passes" + (sc !== S.scale ? " · 0-" + sc + " scale" : ""))),
+          h("div", { class: "r" }, t.att ? fmt(t.rating) : "—")),
+        h("div", { style: { marginTop: "10px" } }, ribbon(tc, sc))));
+  }
+  return wrap;
+}
+
+/* ====================================================== VIEW: SESSION ==
+   Layout stability is a correctness feature here, not a nicety. Nothing in
+   this view is allowed to change height or order while grades are being
+   entered: a row that moves between the eye and the thumb produces a grade
+   logged against the wrong player, and the chart still looks plausible
+   afterwards, so the error is never caught. Hence: no re-sorting during
+   entry, a fixed-height undo strip, and targeted DOM updates instead of a
+   full re-render on every tap. */
+function viewSession(s) {
+  const sc = s.scale || S.scale;
+  const gs = gradesFor(sc);
+  if (!s.log) s.log = [];
+
+  let mode = "tap";
+  let sortBy = "roster";
+  let activePid = null;
+
+  const wrap = h("div", { class: "stack" });
+
+  /* --- top bar --- */
+  wrap.appendChild(h("div", { class: "row" },
+    h("button", { class: "btn quiet", onclick: () => { V.openId = null; setQuick(false); render(); } }, "← Practices"),
+    h("div", { class: "grow" }),
+    h("button", { class: "btn danger", onclick: () => openModal(confirmDelete(s)) }, "Delete")));
+
+  /* --- header stats --- */
+  const statsBox = h("div", { class: "stats" });
+  const ribBox = h("div", { style: { marginTop: "12px" } });
+  function refreshTop() {
+    const tc = teamCounts(s);
+    const t = tally(tc, sc);
+    statsBox.textContent = "";
+    statsBox.appendChild(stat("Rating", t.att ? fmt(t.rating) : "—"));
+    statsBox.appendChild(stat("Passes", t.att));
+    statsBox.appendChild(stat(gs[0] + "s", t.att ? Math.round(t.perfectPct) + "%" : "—"));
+    statsBox.appendChild(stat("Errors", t.att ? Math.round(t.errPct) + "%" : "—"));
+    ribBox.textContent = "";
+    ribBox.appendChild(ribbon(tc, sc, 12));
+  }
+
+  wrap.appendChild(h("div", { class: "panel" },
+    h("div", { class: "row" },
+      h("input", {
+        class: "inp", value: s.label || "", placeholder: "Practice",
+        onchange: (e) => { s.label = e.target.value; commit(); }
+      }),
+      h("input", {
+        type: "date", class: "inp mono", style: { maxWidth: "165px" }, value: s.date,
+        onchange: (e) => { s.date = e.target.value || s.date; commit(); }
+      })),
+    statsBox, ribBox));
+
+  /* --- mode switch --- */
+  const modes = h("div", { class: "seg" });
+  const photoBox = h("div");
+  wrap.appendChild(modes);
+  wrap.appendChild(photoBox);
+
+  function paintModes() {
+    modes.textContent = "";
+    for (const [k, l] of [["tap", "Tap grades"], ["photo", "Read a photo"]]) {
+      modes.appendChild(h("button", {
+        class: "btn " + (mode === k ? "solid" : ""),
+        onclick: () => {
+          if (mode === k) return;
+          mode = k;
+          if (mode !== "tap") { activePid = null; setQuick(false); }
+          paintModes(); paintPhoto(); buildList(); refreshQuick();
+        }
+      }, l));
+    }
+  }
+  function paintPhoto() {
+    photoBox.textContent = "";
+    if (mode === "photo") photoBox.appendChild(photoPanel(s, sc, () => { refreshTop(); buildList(); refreshUndo(); }));
+  }
+
+  /* --- undo strip (fixed height, always) --- */
+  const undoCount = h("span", { class: "note tiny", style: { margin: "0" } });
+  const chipStrip = h("div", { class: "chipstrip" });
+  const undoBtn = h("button", {
+    class: "btn",
+    onclick: () => { undoLast(s); refreshTop(); buildList(); refreshUndo(); refreshQuick(); }
+  }, "↶ Undo");
+  const undoBar = h("div", { class: "panel" },
+    h("div", { class: "row" }, undoBtn, h("div", { class: "grow" }), undoCount),
+    chipStrip);
+
+  function refreshUndo() {
+    const n = s.log.length;
+    undoBtn.disabled = !n;
+    undoCount.textContent = n ? n + " entr" + (n === 1 ? "y" : "ies") + " this practice" : "nothing entered yet";
+    chipStrip.textContent = "";
+    for (const e of s.log.slice(-8).reverse()) {
+      if (e.t === "g") {
+        const p = S.roster.find((x) => x.id === e.p);
+        chipStrip.appendChild(h("span", { class: "chip", style: { color: RAMP[sc][e.g] } },
+          (p ? p.name.slice(0, 7) : "?") + " " + e.g));
+      } else if (e.t === "s") {
+        chipStrip.appendChild(h("span", { class: "chip" }, "sheet +" + (e.n || 0)));
+      } else {
+        chipStrip.appendChild(h("span", { class: "chip" }, "cleared"));
+      }
+    }
+  }
+
+  /* --- sort control (never active while tapping) --- */
+  const sortBar = h("div", { class: "row", style: { padding: "2px 6px 8px" } });
+  function paintSort() {
+    sortBar.textContent = "";
+    sortBar.appendChild(h("span", { class: "note tiny", style: { margin: "0" } }, "Order"));
+    sortBar.appendChild(h("div", { class: "grow" }));
+    for (const [k, l] of [["roster", "Roster"], ["rating", "By rating"]]) {
+      sortBar.appendChild(h("button", {
+        class: "chip",
+        style: k === sortBy ? { color: "var(--text)", borderColor: "var(--accent)" } : {},
+        onclick: () => { sortBy = k; paintSort(); buildList(); }
+      }, l));
+    }
+  }
+
+  /* --- player list, built once; rows updated in place --- */
+  const list = h("div", { class: "panel tight" });
+  const refs = {};
+
+  function orderedRoster() {
+    /* While tapping, order is frozen to the roster no matter what is
+       selected, so a rating change can never move a row mid-drill. */
+    if (mode === "tap" || sortBy === "roster") return S.roster.slice();
+    return S.roster.slice().sort((a, b) => {
+      const ta = tally(s.counts[a.id], sc), tb = tally(s.counts[b.id], sc);
+      if (!ta.att && !tb.att) return 0;
+      if (!ta.att) return 1;
+      if (!tb.att) return -1;
+      return tb.rating - ta.rating;
+    });
+  }
+
+  function refreshRow(pid) {
+    const r = refs[pid];
+    if (!r) return;
+    const c = s.counts[pid] || {};
+    const t = tally(c, sc);
+    r.att.textContent = t.att + " att";
+    r.rate.textContent = t.att ? fmt(t.rating) : "—";
+    r.rib.textContent = "";
+    r.rib.appendChild(ribbon(c, sc, 7));
+    for (const g of gs) if (r.btn[g]) r.btn[g].textContent = "·" + (c[g] || 0);
+    r.row.className = "prow" + (pid === activePid ? " active" : "");
+  }
+
+  function buildList() {
+    list.textContent = "";
+    for (const k in refs) delete refs[k];
+    if (mode !== "tap") { paintSort(); list.appendChild(sortBar); }
+
+    for (const p of orderedRoster()) {
+      const c = s.counts[p.id] || {};
+      const att = h("span", { class: "patt" });
+      const rate = h("span", { class: "prate" });
+      const rib = h("div", { style: { margin: "8px 0 0" } });
+      const row = h("div", { class: "prow" });
+
+      const head = h("button", {
+        class: "ptap",
+        onclick: () => {
+          if (mode !== "tap") return;
+          activePid = activePid === p.id ? null : p.id;
+          for (const q of S.roster) refreshRow(q.id);
+          refreshQuick();
+        }
+      },
+        p.num ? h("span", { class: "pnum" }, "#" + p.num) : null,
+        h("span", { class: "pname" }, p.name || "—"),
+        att, rate);
+
+      row.appendChild(head);
+      row.appendChild(rib);
+
+      const btn = {};
+      if (mode === "tap") {
+        const gwrap = h("div", { class: "grades" });
+        for (const g of gs) {
+          const n = h("span", { class: "n" });
+          btn[g] = n;
+          gwrap.appendChild(h("button", {
+            class: "gb " + gradeClass(g, sc),
+            onclick: () => { tapGrade(p.id, g); }
+          }, h("span", null, String(g)), n));
+        }
+        gwrap.appendChild(h("button", {
+          class: "gb clr",
+          onclick: () => {
+            const prev = Object.assign({}, s.counts[p.id] || {});
+            if (!Object.keys(prev).length) return;
+            s.counts[p.id] = {};
+            s.log.push({ t: "c", p: p.id, d: prev });
+            commit(); refreshRow(p.id); refreshTop(); refreshUndo(); refreshQuick();
+          }
+        }, "clr"));
+        row.appendChild(gwrap);
+      }
+
+      refs[p.id] = { row, att, rate, rib, btn };
+      list.appendChild(row);
+      refreshRow(p.id);
+    }
+    if (mode === "tap") {
+      list.appendChild(h("p", { class: "note tiny", style: { padding: "8px 6px 2px", margin: "0" } },
+        "Tap a name to lock that passer into the bar at the bottom — then you never have to scroll or aim. Undo takes one back."));
+    }
+  }
+
+  /* --- pinned quick-entry bar for the selected passer --- */
+  const quickName = h("span", { class: "nm" });
+  const quickCount = h("span", { class: "ct" });
+  const quickGrades = h("div", { class: "gr" });
+  const quick = h("div", { class: "quick" },
+    h("div", { class: "who" },
+      quickName, quickCount,
+      h("button", { class: "chip", onclick: () => { activePid = null; for (const q of S.roster) refreshRow(q.id); refreshQuick(); } }, "done")),
+    quickGrades);
+
+  function refreshQuick() {
+    const p = activePid ? S.roster.find((x) => x.id === activePid) : null;
+    setQuick(!!p && mode === "tap");
+    if (!p) return;
+    const c = s.counts[p.id] || {};
+    const t = tally(c, sc);
+    quickName.textContent = (p.num ? "#" + p.num + " " : "") + p.name;
+    quickCount.textContent = t.att + " att · " + (t.att ? fmt(t.rating) : "—");
+    quickGrades.textContent = "";
+    for (const g of gs) {
+      quickGrades.appendChild(h("button", {
+        class: "gb " + gradeClass(g, sc), style: { flex: "1" },
+        onclick: () => { tapGrade(p.id, g); }
+      }, h("span", null, String(g)), h("span", { class: "n" }, "·" + (c[g] || 0))));
+    }
+    quickGrades.appendChild(h("button", {
+      class: "gb clr", style: { flex: "0 0 62px" },
+      onclick: () => { undoLast(s); refreshTop(); for (const q of S.roster) refreshRow(q.id); refreshUndo(); refreshQuick(); }
+    }, "undo"));
+  }
+
+  /* one entry point for every grade tap, from either surface */
+  function tapGrade(pid, g) {
+    bump(s, pid, g, 1);
+    buzz(10);
+    refreshRow(pid);
+    refreshTop();
+    refreshUndo();
+    if (pid === activePid) refreshQuick();
+  }
+
+  paintModes(); paintPhoto(); refreshTop(); refreshUndo(); buildList(); refreshQuick();
+  wrap.appendChild(undoBar);
+  wrap.appendChild(list);
+  wrap.appendChild(quick);
+  return wrap;
+}
+
+function setQuick(on) {
+  document.body.classList.toggle("quickon", !!on);
+}
+
+function bump(s, pid, g, delta) {
+  const c = Object.assign({}, s.counts[pid] || {});
+  c[g] = Math.max(0, (c[g] || 0) + delta);
+  s.counts[pid] = c;
+  if (delta > 0) {
+    s.log.push({ t: "g", p: pid, g });
+    if (s.log.length > 4000) s.log.splice(0, s.log.length - 4000);
+  }
+  commit();
+}
+function undoLast(s) {
+  const e = s.log.pop();
+  if (!e) return;
+  if (e.t === "g") {
+    const c = Object.assign({}, s.counts[e.p] || {});
+    c[e.g] = Math.max(0, (c[e.g] || 0) - 1);
+    s.counts[e.p] = c;
+  } else if (e.t === "c") {
+    s.counts[e.p] = e.d;
+  } else if (e.t === "s") {
+    for (const pid in e.d) {
+      const c = Object.assign({}, s.counts[pid] || {});
+      for (const g in e.d[pid]) c[g] = Math.max(0, (c[g] || 0) - e.d[pid][g]);
+      s.counts[pid] = c;
+    }
+    s.sheets = Math.max(0, (s.sheets || 0) - 1);
+  }
+  commit();
+}
+
+function confirmDelete(s) {
+  return h("div", { class: "panel modal" },
+    h("h2", { class: "sec" }, "Delete this practice?"),
+    h("p", { class: "note" },
+      "“" + (s.label || "Practice") + "” on " + s.date + " and everything logged in it. This cannot be undone."),
+    h("div", { class: "row" },
+      h("button", { class: "btn danger grow", onclick: () => {
+        S.sessions = S.sessions.filter((x) => x.id !== s.id);
+        commit(); closeModal(); V.openId = null; render();
+      } }, "Delete it"),
+      h("button", { class: "btn grow", onclick: closeModal }, "Keep it")));
+}
+
+/* ======================================================== VIEW: SEASON = */
+function viewSeason() {
+  const wrap = h("div", { class: "stack" });
+  const usable = S.sessions.filter((s) => (s.scale || S.scale) === S.scale);
+  const skipped = S.sessions.length - usable.length;
+
+  const totals = {};
+  for (const p of S.roster) totals[p.id] = {};
+  for (const s of usable)
+    for (const pid in s.counts) totals[pid] = mergeCounts(totals[pid], s.counts[pid]);
+
+  /* ---- trend ---- */
+  let pick = "team";
+  const chartBox = h("div");
+  function paintChart() {
+    chartBox.textContent = "";
+    const ordered = usable.slice().sort((a, b) => a.date.localeCompare(b.date));
+    const series = ordered.map((s) => {
+      const c = pick === "team" ? teamCounts(s) : (s.counts[pick] || {});
+      const t = tally(c, S.scale);
+      return { date: s.date, rating: t.rating, att: t.att };
+    }).filter((d) => d.att > 0);
+
+    if (series.length < 2) {
+      chartBox.appendChild(h("p", { class: "note", style: { margin: "0" } },
+        "Two logged practices and the trend line shows up here."));
+      return;
+    }
+    /* The y-axis tracks the data, not the full 0-scale range. A season of
+       serve receive lives in a narrow band (most teams sit between 1.8 and
+       2.4 on a 0-3 scale); drawn against a fixed 0-3 axis, a real half-point
+       improvement is a flat line and the chart answers the one question the
+       app exists to answer with "nothing happened". Axis labels show the
+       true numbers, so the zoom is visible rather than misleading. */
+    const W = 320, H = 118;
+    const vals = series.map((d) => d.rating);
+    let lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+    const MINSPAN = 0.5;
+    if (hi - lo < MINSPAN) {
+      const mid = (hi + lo) / 2;
+      lo = mid - MINSPAN / 2; hi = mid + MINSPAN / 2;
+    } else {
+      const pad = (hi - lo) * 0.22;
+      lo -= pad; hi += pad;
+    }
+    lo = Math.max(0, lo); hi = Math.min(S.scale, hi);
+    if (hi - lo < 0.2) { lo = Math.max(0, hi - 0.2); }
+
+    const px = (i) => 34 + (i * (W - 42)) / Math.max(1, series.length - 1);
+    const py = (r) => H - 16 - ((r - lo) / (hi - lo)) * (H - 32);
+    const NS = "http://www.w3.org/2000/svg";
+    const mk = (t, at) => {
+      const n = document.createElementNS(NS, t);
+      for (const k in at) n.setAttribute(k, at[k]);
+      return n;
+    };
+    const svg = mk("svg", { viewBox: "0 0 " + W + " " + H });
+    svg.style.width = "100%"; svg.style.height = "140px";
+
+    for (const v of [lo, (lo + hi) / 2, hi]) {
+      svg.appendChild(mk("line", {
+        x1: 30, x2: W, y1: py(v), y2: py(v), stroke: "#2C3659", "stroke-width": 1
+      }));
+      const tx = mk("text", {
+        x: 0, y: py(v) + 3, fill: "#8B96B8", "font-size": 9, "font-family": "monospace"
+      });
+      tx.textContent = v.toFixed(2);
+      svg.appendChild(tx);
+    }
+
+    svg.appendChild(mk("polyline", {
+      fill: "none", stroke: "#6E7BFF", "stroke-width": 2,
+      "stroke-linejoin": "round", "stroke-linecap": "round",
+      points: series.map((d, i) => px(i) + "," + py(d.rating)).join(" ")
+    }));
+    series.forEach((d, i) => {
+      svg.appendChild(mk("circle", {
+        cx: px(i), cy: py(d.rating), r: 3.4, fill: "#3DDC97"
+      }));
+    });
+    chartBox.appendChild(svg);
+
+    /* the number a coach actually wants: did this get better or worse */
+    const delta = series[series.length - 1].rating - series[0].rating;
+    const up = delta >= 0;
+    const atts = series.map((d) => d.att);
+    chartBox.appendChild(h("div", { class: "row", style: { marginTop: "4px", flexWrap: "wrap" } },
+      h("span", {
+        class: "chip",
+        style: { color: up ? "var(--ok)" : "var(--bad)", borderColor: up ? "#2F6E52" : "#4A2233" }
+      }, (up ? "▲ +" : "▼ ") + delta.toFixed(2) + " across " + series.length + " practices"),
+      h("span", { class: "chip" }, "first " + series[0].rating.toFixed(2)),
+      h("span", { class: "chip" }, "latest " + series[series.length - 1].rating.toFixed(2))));
+    chartBox.appendChild(h("div", { class: "note tiny", style: { fontFamily: "var(--mono)" } },
+      series[0].date + " → " + series[series.length - 1].date + " · " +
+      Math.min.apply(null, atts) + "–" + Math.max.apply(null, atts) + " passes per practice"));
+  }
+
+  const sel = h("select", { class: "inp", onchange: (e) => { pick = e.target.value; paintChart(); } },
+    h("option", { value: "team" }, "Team average"),
+    S.roster.map((p) => h("option", { value: p.id }, p.name)));
+
+  wrap.appendChild(h("div", { class: "panel" },
+    h("div", { class: "row", style: { marginBottom: "12px" } },
+      sel,
+      h("button", { class: "btn", onclick: exportCSV }, "CSV")),
+    chartBox));
+  paintChart();
+
+  if (skipped) {
+    wrap.appendChild(h("div", { class: "banner warn" },
+      skipped + " practice" + (skipped === 1 ? " was" : "s were") +
+      " logged on the other grading scale and are not included above. Switch the scale in Roster to see them."));
+  }
+
+  /* ---- table ---- */
+  const table = h("div", { class: "panel tight" });
+  table.appendChild(h("div", { class: "thead" },
+    h("span", { class: "grow" }, "Passer"),
+    h("span", { class: "n" }, "Att"),
+    h("span", { class: "n" }, "Good%"),
+    h("span", { class: "n" }, "Rating")));
+
+  const rows = S.roster.map((p) => ({ p, c: totals[p.id], t: tally(totals[p.id], S.scale) }))
+    .sort((a, b) => (b.t.att ? b.t.rating : -1) - (a.t.att ? a.t.rating : -1));
+
+  for (const { p, c, t } of rows) {
+    table.appendChild(h("div", { class: "prow" },
+      h("div", { class: "row", style: { alignItems: "baseline" } },
+        h("span", { class: "grow pname" },
+          p.num ? h("span", { class: "pnum" }, "#" + p.num + " ") : null, p.name || "—"),
+        h("span", { class: "n patt", style: { width: "50px", textAlign: "right", marginLeft: "0" } }, t.att),
+        h("span", { class: "n patt", style: { width: "50px", textAlign: "right", marginLeft: "0" } },
+          t.att ? Math.round(t.goodPct) : "—"),
+        h("span", { class: "prate", style: { width: "50px" } }, t.att ? fmt(t.rating) : "—")),
+      h("div", { style: { marginTop: "6px" } }, ribbon(c, S.scale, 6))));
+  }
+  wrap.appendChild(table);
+  return wrap;
+}
+
+/* ---------------------------------------------------------------- CSV -- */
+function buildCSV() {
+  const gs = gradesFor(S.scale);
+  const head = ["Date", "Practice", "Number", "Player", ...gs.map((g) => g + "s"), "Att", "Rating", "Good%", "Err%"];
+  const q = (v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
+  const lines = [head.join(",")];
+  S.sessions.slice().sort((a, b) => a.date.localeCompare(b.date)).forEach((s) => {
+    const sc = s.scale || S.scale;
+    if (sc !== S.scale) return;
+    S.roster.forEach((p) => {
+      const c = s.counts[p.id];
+      if (!c) return;
+      const t = tally(c, sc);
+      if (!t.att) return;
+      lines.push([s.date, q(s.label), p.num, q(p.name), ...gs.map((g) => c[g] || 0),
+        t.att, fmt(t.rating), Math.round(t.goodPct), Math.round(t.errPct)].join(","));
+    });
+  });
+  return lines.join("\n");
+}
+function download(filename, text, mime) {
+  const blob = new Blob([text], { type: (mime || "text/plain") + ";charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = h("a", { href: url, download: filename });
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1500);
+}
+function exportCSV() {
+  const csv = buildCSV();
+  openModal(h("div", { class: "panel modal" },
+    h("div", { class: "spread", style: { marginBottom: "10px" } },
+      h("strong", null, "Season CSV"),
+      h("button", { class: "btn quiet", onclick: closeModal }, "Close")),
+    h("div", { class: "row", style: { marginBottom: "10px" } },
+      h("button", { class: "btn solid grow", onclick: () => download("passchart-" + todayISO() + ".csv", csv, "text/csv") }, "Download .csv"),
+      h("button", { class: "btn grow", onclick: async (e) => {
+        try { await navigator.clipboard.writeText(csv); e.target.textContent = "Copied"; }
+        catch (err) { e.target.textContent = "Select below"; }
+      } }, "Copy")),
+    h("textarea", { class: "inp mono", readonly: true, style: { height: "220px", fontSize: "12px" } }, csv)));
+}
+
+/* ======================================================== VIEW: ROSTER = */
+function viewRoster() {
+  const wrap = h("div", { class: "stack" });
+  let local = S.roster.map((p) => Object.assign({}, p));
+
+  /* paste box */
+  const paste = h("textarea", { class: "inp", placeholder: "7 Riley\n12 Sam\n…" });
+  wrap.appendChild(h("div", { class: "panel" },
+    h("h2", { class: "sec" }, "Paste names"),
+    h("p", { class: "note" }, "One per line, or comma separated. Put the jersey number first if you want it: “7 Riley”."),
+    paste,
+    h("button", { class: "btn", style: { marginTop: "8px" }, onclick: () => {
+      const lines = paste.value.split(/[\n,]/).map((x) => x.trim()).filter(Boolean);
+      if (!lines.length) return;
+      local = lines.map((l, i) => {
+        const m = l.match(/^(\d{1,2})[\s.\-)]+(.+)$/);
+        return { id: (local[i] && local[i].id) || uid(), num: m ? m[1] : "", name: m ? m[2] : l };
+      });
+      paste.value = "";
+      paintRows();
+    } }, "Fill roster")));
+
+  /* scale */
+  const hasData = S.sessions.some((s) => Object.keys(s.counts || {}).length);
+  const scaleBox = h("div", { class: "seg", style: { marginTop: "8px" } });
+  function paintScale() {
+    scaleBox.textContent = "";
+    for (const sc of [3, 4]) {
+      scaleBox.appendChild(h("button", {
+        class: "btn " + (S.scale === sc ? "solid" : ""),
+        onclick: () => {
+          if (S.scale === sc) return;
+          if (hasData) { openModal(confirmScale(sc, paintScale)); return; }
+          S.scale = sc; commit(); paintScale();
+        }
+      }, "0–" + sc + " scale"));
+    }
+  }
+  paintScale();
+  wrap.appendChild(h("div", { class: "panel" },
+    h("h2", { class: "sec" }, "Grading scale"),
+    scaleBox,
+    h("p", { class: "note tiny" },
+      "Each practice remembers the scale it was logged on, so old practices are never silently re-scored. " +
+      "Pick one and stay on it for the year.")));
+
+  /* rows */
+  const rowsBox = h("div", { class: "panel tight" });
+  function paintRows() {
+    rowsBox.textContent = "";
+    local.forEach((p) => {
+      rowsBox.appendChild(h("div", { class: "row", style: { padding: "5px 6px" } },
+        h("input", {
+          class: "inp mono mid", style: { width: "58px" }, inputmode: "numeric",
+          placeholder: "#", value: p.num || "",
+          oninput: (e) => { p.num = e.target.value.replace(/\D/g, "").slice(0, 2); }
+        }),
+        h("input", {
+          class: "inp", value: p.name || "", placeholder: "Name",
+          oninput: (e) => { p.name = e.target.value; }
+        }),
+        h("button", { class: "btn quiet", style: { padding: "10px" }, onclick: () => {
+          local = local.filter((x) => x.id !== p.id); paintRows();
+        } }, "×")));
+    });
+    rowsBox.appendChild(h("button", { class: "btn quiet wide", style: { marginTop: "6px" }, onclick: () => {
+      local.push({ id: uid(), num: "", name: "" }); paintRows();
+    } }, "+ Add a player"));
+  }
+  paintRows();
+  wrap.appendChild(rowsBox);
+
+  const saveBtn = h("button", { class: "btn solid big wide", onclick: () => {
+    S.roster = local.filter((p) => (p.name || "").trim()).map((p) => ({ id: p.id, num: p.num, name: p.name.trim() }));
+    if (!S.roster.length) S.roster = freshRoster();
+    local = S.roster.map((p) => Object.assign({}, p));
+    commit();
+    saveBtn.textContent = "Roster saved";
+    setTimeout(() => { saveBtn.textContent = "Save roster"; }, 1400);
+    paintRows();
+  } }, "Save roster");
+  wrap.appendChild(saveBtn);
+  wrap.appendChild(h("p", { class: "note tiny center" },
+    "Removing a player here does not delete their past practice data."));
+  return wrap;
+}
+
+function confirmScale(sc, after) {
+  return h("div", { class: "panel modal" },
+    h("h2", { class: "sec" }, "Switch to the 0–" + sc + " scale?"),
+    h("p", { class: "note" },
+      "Practices already logged keep their own scale and will be hidden from the Season view " +
+      "while this scale is selected. Nothing is deleted, and switching back brings them right back."),
+    h("div", { class: "row" },
+      h("button", { class: "btn solid grow", onclick: () => { S.scale = sc; commit(); closeModal(); after && after(); } }, "Switch"),
+      h("button", { class: "btn grow", onclick: closeModal }, "Cancel")));
+}
+
+/* ========================================================= VIEW: SETUP = */
+function viewSetup() {
+  const wrap = h("div", { class: "stack" });
+  const hlth = Store.health;
+
+  /* --- install --- */
+  const installBox = h("div", { class: "panel" },
+    h("h2", { class: "sec" }, "Put it on your home screen"),
+    h("p", { class: "note" },
+      "This is a real app once installed — own icon, no browser bars, opens with no Claude account and no internet."),
+    h("p", { class: "note" },
+      h("strong", null, "iPhone: "), "Share button → ", h("span", { class: "kbd" }, "Add to Home Screen"), "."),
+    h("p", { class: "note" },
+      h("strong", null, "Android: "), "menu → ", h("span", { class: "kbd" }, "Install app"), "."));
+  if (deferredInstall) {
+    installBox.appendChild(h("button", { class: "btn solid wide", onclick: async () => {
+      deferredInstall.prompt();
+      await deferredInstall.userChoice;
+      deferredInstall = null;
+      render();
+    } }, "Install now"));
+  }
+  wrap.appendChild(installBox);
+
+  /* --- health --- */
+  wrap.appendChild(h("div", { class: "panel" },
+    h("h2", { class: "sec" }, "Where your data lives"),
+    h("p", { class: "note" },
+      "Everything is stored on this device. Nothing is uploaded, and saving never touches the network — " +
+      "so a gym with no signal changes nothing."),
+    h("div", { class: "row", style: { gap: "6px", flexWrap: "wrap" } },
+      h("span", { class: "pill" + (hlth.lsOK ? "" : " err") }, "localStorage " + (hlth.lsOK ? "OK" : "BLOCKED")),
+      h("span", { class: "pill" + (hlth.idbOK ? "" : " err") }, "IndexedDB " + (hlth.idbOK ? "OK" : "BLOCKED")),
+      h("span", { class: "pill" }, S.sessions.length + " practices"),
+      h("span", { class: "pill" }, "rev " + S.rev),
+      h("span", { class: "pill" + (swReady ? "" : " off") }, swReady ? "OFFLINE READY" : "OFFLINE NOT ARMED")),
+    hlth.lastErr ? h("p", { class: "note tiny" }, hlth.lastErr) : null,
+    !swReady ? h("p", { class: "note tiny" },
+      "The offline cache only arms when the app is served over https or localhost — not when opened " +
+      "straight off the disk. Install it to your home screen and it arms itself.") : null));
+
+  /* --- backup --- */
+  const importFile = h("input", { type: "file", accept: "application/json,.json", class: "hide",
+    onchange: (e) => {
+      const f = e.target.files && e.target.files[0];
+      e.target.value = "";
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = () => {
+        try {
+          const data = JSON.parse(String(r.result));
+          if (!data || !Array.isArray(data.sessions)) throw new Error("That file is not a Pass Chart backup.");
+          openModal(confirmImport(data));
+        } catch (err) { openModal(msgModal("Could not read that backup", err.message)); }
+      };
+      r.readAsText(f);
+    } });
+  wrap.appendChild(h("div", { class: "panel" },
+    h("h2", { class: "sec" }, "Backup"),
+    h("p", { class: "note" },
+      "A phone can lose browser storage — a reinstall, a wipe, iOS reclaiming space. " +
+      "Save a backup file after a big practice and this can never bite you."),
+    h("div", { class: "row" },
+      h("button", { class: "btn solid grow", onclick: () =>
+        download("passchart-backup-" + todayISO() + ".json", JSON.stringify(S, null, 2), "application/json")
+      }, "Save backup"),
+      h("button", { class: "btn grow", onclick: () => importFile.click() }, "Restore")),
+    importFile));
+
+  /* --- photo reader --- */
+  const st = S.settings;
+  const keyInp = h("input", { class: "inp mono", type: "password", placeholder: "sk-ant-…",
+    value: st.apiKey || "", oninput: (e) => { st.apiKey = e.target.value.trim(); } });
+  const proxyInp = h("input", { class: "inp mono", placeholder: "https://… (optional)",
+    value: st.proxyUrl || "", oninput: (e) => { st.proxyUrl = e.target.value.trim(); } });
+  const modelInp = h("input", { class: "inp mono", value: st.model || "claude-sonnet-5",
+    oninput: (e) => { st.model = e.target.value.trim(); } });
+
+  wrap.appendChild(h("div", { class: "panel" },
+    h("h2", { class: "sec" }, "Photo reader"),
+    h("p", { class: "note" },
+      "Reading a handwritten sheet needs a vision model, and that means one online round trip. " +
+      "Everything else in this app works with the phone in airplane mode."),
+    h("p", { class: "note" },
+      h("strong", null, "Offline is handled: "),
+      "shoot the photo at the gym with no signal and it is saved to the device and queued. " +
+      "It reads itself the moment you have bars again."),
+    h("label", { class: "fld", style: { marginTop: "12px" } }, "Anthropic API key (stays on this device)"),
+    keyInp,
+    h("label", { class: "fld", style: { marginTop: "10px" } }, "Or a proxy URL, if you would rather not hold a key"),
+    proxyInp,
+    h("label", { class: "fld", style: { marginTop: "10px" } }, "Model"),
+    modelInp,
+    h("button", { class: "btn solid wide", style: { marginTop: "12px" }, onclick: () => { commit(); render(); } },
+      "Save reader settings"),
+    h("p", { class: "note tiny" },
+      "The key is kept only in this browser's storage on this phone and is sent only to api.anthropic.com. " +
+      "It is not in the app's source, so sharing the app never shares your key.")));
+
+  /* --- queue --- */
+  const qBox = h("div", { class: "panel" }, h("h2", { class: "sec" }, "Photos waiting for signal"));
+  wrap.appendChild(qBox);
+  Store.queueAll().then((items) => {
+    if (!items.length) {
+      qBox.appendChild(h("p", { class: "note", style: { margin: "0" } }, "Nothing queued."));
+      return;
+    }
+    for (const it of items) {
+      const sess = S.sessions.find((x) => x.id === it.sessionId);
+      qBox.appendChild(h("div", { class: "row", style: { padding: "8px 0", borderTop: "1px solid var(--line)" } },
+        h("span", { class: "grow note", style: { margin: "0" } },
+          (sess ? sess.label + " · " + sess.date : "unknown practice")),
+        h("button", { class: "btn quiet", onclick: async () => { await Store.queueDel(it.id); render(); } }, "Discard")));
+    }
+    qBox.appendChild(h("button", { class: "btn solid wide", style: { marginTop: "10px" },
+      onclick: () => runQueue(true) }, "Read them now"));
+  });
+
+  /* --- team name --- */
+  wrap.appendChild(h("div", { class: "panel" },
+    h("h2", { class: "sec" }, "Team name"),
+    h("input", { class: "inp", value: S.team, onchange: (e) => { S.team = e.target.value || "Team"; commit(); render(); } })));
+
+  /* --- danger --- */
+  wrap.appendChild(h("button", { class: "btn danger wide", onclick: () => openModal(
+    h("div", { class: "panel modal" },
+      h("h2", { class: "sec" }, "Erase everything?"),
+      h("p", { class: "note" }, "Every practice, the roster, and your settings on this device. Save a backup first if you are not sure."),
+      h("div", { class: "row" },
+        h("button", { class: "btn danger grow", onclick: () => {
+          S.sessions = []; S.roster = freshRoster(); S.rev = 0;
+          commit(); closeModal(); V.tab = "practices"; render();
+        } }, "Erase"),
+        h("button", { class: "btn grow", onclick: closeModal }, "Cancel"))))
+  }, "Erase all data"));
+
+  wrap.appendChild(h("p", { class: "note tiny center" }, "Pass Chart · offline build"));
+  return wrap;
+}
+
+function confirmImport(data) {
+  const n = data.sessions.length;
+  return h("div", { class: "panel modal" },
+    h("h2", { class: "sec" }, "Restore this backup?"),
+    h("p", { class: "note" },
+      "It holds " + n + " practice" + (n === 1 ? "" : "s") + " and " +
+      ((data.roster || []).length) + " players. This replaces what is on this device right now."),
+    h("div", { class: "row" },
+      h("button", { class: "btn solid grow", onclick: () => {
+        S.team = data.team || S.team;
+        S.scale = data.scale || S.scale;
+        S.roster = (data.roster && data.roster.length) ? data.roster : S.roster;
+        S.sessions = data.sessions;
+        S.settings = Object.assign({}, S.settings, data.settings || {});
+        commit(); closeModal(); V.tab = "practices"; render();
+      } }, "Restore"),
+      h("button", { class: "btn grow", onclick: closeModal }, "Cancel")));
+}
+function msgModal(title, text) {
+  return h("div", { class: "panel modal" },
+    h("h2", { class: "sec" }, title),
+    h("p", { class: "note" }, text),
+    h("button", { class: "btn wide", onclick: closeModal }, "OK"));
+}
+
+/* ========================================================= PHOTO INPUT = */
+/* Re-encode any picked image through a canvas. This does three jobs:
+   shrinks it for the API, strips EXIF rotation surprises, and - the useful
+   one - turns an iPhone HEIC into a JPEG on any browser that can decode
+   HEIC at all, which is exactly the browser an iPhone uses. */
+async function imageToJpeg(file, maxDim) {
+  const MAX = maxDim || 1568;
+  let bmp;
+  try {
+    bmp = await createImageBitmap(file);
+  } catch (e) {
+    bmp = await new Promise((res, rej) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => { URL.revokeObjectURL(url); res(img); };
+      img.onerror = () => { URL.revokeObjectURL(url); rej(new Error(
+        "This browser could not open that image. If it came off an iPhone it may be a HEIC — " +
+        "take the shot inside the app, or save it as a JPEG first.")); };
+      img.src = url;
+    });
+  }
+  const w = bmp.width, hgt = bmp.height;
+  const scale = Math.min(1, MAX / Math.max(w, hgt));
+  const cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(hgt * scale));
+  const cv = document.createElement("canvas");
+  cv.width = cw; cv.height = ch;
+  cv.getContext("2d").drawImage(bmp, 0, 0, cw, ch);
+  const dataUrl = cv.toDataURL("image/jpeg", 0.85);
+  return { dataUrl, base64: dataUrl.split(",")[1], w: cw, h: ch };
+}
+
+function sheetPrompt(roster, scale) {
+  const gs = gradesFor(scale);
+  const names = roster.map((p) => (p.num ? "#" + p.num + " " + p.name : p.name)).join(", ");
+  const zeros = gs.map((g) => '"' + g + '":0').join(",");
+  return 'This is a photo of a volleyball serve-receive passing chart from a practice. ' +
+    'Read every passer\'s grades off the sheet.\n\n' +
+    'Grading scale in use: ' + gs.join(", ") + ' (' + gs[0] + ' is a perfect pass, 0 is an ace/overpass/shank).\n\n' +
+    'Team roster to match names against: ' + names + '\n\n' +
+    'Rules:\n' +
+    '- Sheets may record grades as tally marks, as a running sequence of digits (e.g. "3 2 3 0 1"), or as columns already counted. Handle all three.\n' +
+    '- Count carefully. Total attempts per passer must equal the marks you see on that row.\n' +
+    '- Match each row to the closest roster name or jersey number. If a row does not match anyone, set "matched" to null.\n' +
+    '- Ignore rows for drills, dates, or totals.\n\n' +
+    'Respond with ONLY this JSON, no prose and no markdown fences:\n' +
+    '{"rows":[{"name":"as written on the sheet","matched":"exact roster name or null","counts":{' + zeros + '}}],' +
+    '"note":"one short sentence about anything unclear, or empty string"}';
+}
+
+async function callReader(base64, mediaType, roster, scale) {
+  const st = S.settings;
+  const prompt = sheetPrompt(roster, scale);
+  const payload = {
+    model: st.model || "claude-sonnet-5",
+    max_tokens: 1500,
+    messages: [{
+      role: "user",
+      content: [
+        { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
+        { type: "text", text: prompt }
+      ]
+    }]
+  };
+  let res;
+  if (st.proxyUrl) {
+    res = await fetch(st.proxyUrl, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
+    });
+  } else if (st.apiKey) {
+    res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": st.apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify(payload)
+    });
+  } else {
+    const e = new Error("No reader is set up yet. Open Setup and add an API key or a proxy URL.");
+    e.noReader = true;
+    throw e;
+  }
+  if (!res.ok) {
+    let detail = "";
+    try { const j = await res.json(); detail = (j.error && j.error.message) || ""; } catch (e) {}
+    throw new Error("The reader returned " + res.status + (detail ? ": " + detail : "") + ".");
+  }
+  const json = await res.json();
+  const text = (json.content || []).map((c) => (c.type === "text" ? c.text : "")).join("")
+    .replace(/```json|```/g, "").trim();
+  let parsed;
+  try { parsed = JSON.parse(text); }
+  catch (e) {
+    const m = text.match(/\{[\s\S]*\}/);
+    if (!m) throw new Error("The sheet came back unreadable. Try a straighter, brighter photo.");
+    parsed = JSON.parse(m[0]);
+  }
+  return parsed;
+}
+
+function matchPlayer(rowName, matched, roster) {
+  const norm = (s) => String(s == null ? "" : s).toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
+  const target = norm(matched || rowName);
+  if (!target) return "";
+  let p = roster.find((x) => norm(x.name) === target);
+  if (p) return p.id;
+  p = roster.find((x) => norm(x.name) && target.indexOf(norm(x.name)) >= 0);
+  if (p) return p.id;
+  p = roster.find((x) => norm(x.name).split(" ").some((w) => w.length > 2 && target.indexOf(w) >= 0));
+  if (p) return p.id;
+  const num = String(rowName == null ? "" : rowName).match(/\d{1,2}/);
+  if (num) { p = roster.find((x) => String(x.num) === num[0]); if (p) return p.id; }
+  return "";
+}
+
+function photoPanel(s, sc, onCommit) {
+  const gs = gradesFor(sc);
+  const panel = h("div", { class: "panel" });
+  let draft = null, busy = false, err = "", note = "", preview = "";
+
+  const file = h("input", { type: "file", accept: "image/*", capture: "environment", class: "hide",
+    onchange: async (e) => {
+      const f = e.target.files && e.target.files[0];
+      e.target.value = "";
+      if (!f) return;
+      err = ""; note = ""; busy = true; paint();
+      try {
+        const img = await imageToJpeg(f);
+        preview = img.dataUrl;
+        if (!navigator.onLine) {
+          await Store.queuePut({ id: uid(), sessionId: s.id, dataUrl: img.dataUrl, at: Date.now() });
+          err = "";
+          note = "No signal, so the photo is saved on the phone and queued. " +
+                 "It reads itself as soon as you have bars.";
+          busy = false; paint();
+          return;
+        }
+        const parsed = await callReader(img.base64, "image/jpeg", S.roster, sc);
+        draft = (parsed.rows || []).map((r) => ({
+          key: uid(),
+          pid: matchPlayer(r.name, r.matched, S.roster),
+          raw: r.name || "?",
+          counts: gs.reduce((o, g) => { o[g] = Number(r.counts && r.counts[g]) || 0; return o; }, {})
+        }));
+        note = parsed.note || "";
+        if (!draft.length) err = "No passer rows were found on that sheet.";
+      } catch (e2) {
+        if (!navigator.onLine || /network|failed to fetch/i.test(e2.message)) {
+          await Store.queuePut({ id: uid(), sessionId: s.id, dataUrl: preview, at: Date.now() });
+          note = "Could not reach the reader, so the photo is queued on the phone and will read itself later.";
+        } else {
+          err = e2.message;
+        }
+      }
+      busy = false; paint();
+    } });
+
+  function paint() {
+    panel.textContent = "";
+    panel.appendChild(file);
+
+    if (!draft) {
+      panel.appendChild(h("p", { class: "note", style: { marginTop: "0" } },
+        "Shoot the whole sheet straight on in good light. Tally marks, digit strings, or counted columns all work."));
+      panel.appendChild(h("button", { class: "btn solid wide big", disabled: busy,
+        onclick: () => file.click() }, busy ? "Reading the sheet…" : "Take or choose a photo"));
+      if (!S.settings.apiKey && !S.settings.proxyUrl) {
+        panel.appendChild(h("p", { class: "note tiny" },
+          "No reader is set up yet — add an API key under Setup. Tap entry works without it."));
+      }
+      if (note) panel.appendChild(h("div", { class: "banner info", style: { marginTop: "10px" } }, note));
+      if (err) panel.appendChild(h("div", { class: "banner bad", style: { marginTop: "10px" } }, err));
+      if (preview && !busy) panel.appendChild(h("img", { class: "shot", src: preview, style: { marginTop: "10px" } }));
+      return;
+    }
+
+    panel.appendChild(h("p", { class: "note", style: { marginTop: "0" } },
+      "Check each row against the sheet, fix anything wrong, then add it. " + note));
+    for (const r of draft) {
+      const sel = h("select", { class: "inp", onchange: (e) => { r.pid = e.target.value; } },
+        h("option", { value: "" }, "Skip this row"),
+        S.roster.map((p) => h("option", { value: p.id, selected: p.id === r.pid },
+          (p.num ? "#" + p.num + " " : "") + p.name)));
+      const gwrap = h("div", { class: "row", style: { gap: "6px" } });
+      for (const g of gs) {
+        gwrap.appendChild(h("div", { class: "gin", style: { flex: "1" } },
+          h("div", { class: "lab", style: { color: RAMP[sc][g], fontSize: "10px", fontFamily: "var(--mono)", marginBottom: "3px" } }, g + "s"),
+          h("input", {
+            class: "inp mono mid", inputmode: "numeric", value: r.counts[g],
+            style: { padding: "8px 4px" },
+            oninput: (e) => { r.counts[g] = Number(e.target.value) || 0; }
+          })));
+      }
+      panel.appendChild(h("div", { class: "draft", style: { marginBottom: "10px" } },
+        h("div", { class: "row" },
+          h("span", { class: "pnum", style: { minWidth: "62px" } }, String(r.raw).slice(0, 12)),
+          sel),
+        gwrap));
+    }
+    panel.appendChild(h("div", { class: "row" },
+      h("button", { class: "btn solid grow", onclick: () => {
+        const applied = {};
+        for (const r of draft) {
+          if (!r.pid) continue;
+          applied[r.pid] = Object.assign({}, r.counts);
+          s.counts[r.pid] = mergeCounts(s.counts[r.pid], r.counts);
+        }
+        const n = Object.values(applied).reduce((a, c) => a + Object.values(c).reduce((x, y) => x + y, 0), 0);
+        s.sheets = (s.sheets || 0) + 1;
+        s.log.push({ t: "s", d: applied, n });
+        commit();
+        draft = null; note = ""; preview = "";
+        paint(); onCommit && onCommit();
+      } }, "Add to practice"),
+      h("button", { class: "btn quiet", onclick: () => { draft = null; paint(); } }, "Discard")));
+  }
+  paint();
+  return panel;
+}
+
+/* --------------------------------------------------------- photo queue - */
+async function runQueue(manual) {
+  const items = await Store.queueAll();
+  if (!items.length) { if (manual) openModal(msgModal("Nothing queued", "There are no photos waiting.")); return; }
+  if (!navigator.onLine) { if (manual) openModal(msgModal("Still offline", "Try again when you have signal.")); return; }
+  if (!S.settings.apiKey && !S.settings.proxyUrl) {
+    if (manual) openModal(msgModal("No reader set up", "Add an API key or proxy URL first."));
+    return;
+  }
+  let done = 0, failed = 0;
+  for (const it of items) {
+    const s = S.sessions.find((x) => x.id === it.sessionId);
+    if (!s) { await Store.queueDel(it.id); continue; }
+    const sc = s.scale || S.scale;
+    try {
+      const parsed = await callReader(it.dataUrl.split(",")[1], "image/jpeg", S.roster, sc);
+      const applied = {};
+      for (const r of (parsed.rows || [])) {
+        const pid = matchPlayer(r.name, r.matched, S.roster);
+        if (!pid) continue;
+        const c = gradesFor(sc).reduce((o, g) => { o[g] = Number(r.counts && r.counts[g]) || 0; return o; }, {});
+        applied[pid] = c;
+        s.counts[pid] = mergeCounts(s.counts[pid], c);
+      }
+      const n = Object.values(applied).reduce((a, c) => a + Object.values(c).reduce((x, y) => x + y, 0), 0);
+      s.sheets = (s.sheets || 0) + 1;
+      s.log.push({ t: "s", d: applied, n });
+      commit();
+      await Store.queueDel(it.id);
+      done++;
+    } catch (e) { failed++; }
+  }
+  if (manual || done) {
+    openModal(msgModal("Queued photos",
+      done + " read and added" + (failed ? ", " + failed + " still waiting" : "") +
+      ". Open the practice and check the numbers against the sheet."));
+  }
+  render();
+}
+
+/* ============================================================== MODAL == */
+function openModal(node) {
+  closeModal();
+  const scrim = h("div", { class: "scrim", id: "scrim", onclick: (e) => { if (e.target.id === "scrim") closeModal(); } }, node);
+  document.body.appendChild(scrim);
+}
+function closeModal() { const s = $("#scrim"); if (s) s.remove(); }
+
+/* =============================================================== BOOT == */
+let deferredInstall = null;
+let swReady = false;
+
+window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferredInstall = e; });
+window.addEventListener("online", () => { paintBadge(); runQueue(false); });
+window.addEventListener("offline", paintBadge);
+for (const ev of ["pagehide", "blur", "visibilitychange"]) {
+  window.addEventListener(ev, () => { Store.saveSync(S); Store.saveMirror(JSON.parse(JSON.stringify(S))); });
+}
+
+/* keep the screen awake while a practice is open */
+let wakeLock = null;
+async function keepAwake() {
+  try {
+    if ("wakeLock" in navigator && !wakeLock && document.visibilityState === "visible") {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => { wakeLock = null; });
+    }
+  } catch (e) {}
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") keepAwake(); });
+
+function hydrate(saved) {
+  if (!saved || typeof saved !== "object") return false;
+  S.rev = saved.rev || 0;
+  S.team = saved.team || S.team;
+  S.scale = saved.scale === 4 ? 4 : 3;
+  if (Array.isArray(saved.roster) && saved.roster.length) S.roster = saved.roster;
+  if (Array.isArray(saved.sessions)) S.sessions = saved.sessions;
+  S.settings = Object.assign({ apiKey: "", proxyUrl: "", model: "claude-sonnet-5" }, saved.settings || {});
+  for (const s of S.sessions) { if (!s.log) s.log = []; if (!s.counts) s.counts = {}; }
+  saveState = "saved";
+  savedAt = null;
+  return true;
+}
+
+async function boot() {
+  /* 1. instant path - localStorage is synchronous, so paint on frame one */
+  hydrate(Store.loadSync());
+  render();
+  keepAwake();
+
+  /* 2. durable path - IndexedDB may hold a newer copy than localStorage,
+        e.g. if the browser evicted local storage between sessions. Only
+        adopt it if it is genuinely newer, then repaint. */
+  await Store.init();
+  const deep = await Store.load();
+  if (deep && (deep.rev || 0) > (S.rev || 0)) {
+    /* Only repaint when the deep store really was ahead. An unconditional
+       re-render here would wipe whatever the coach had already tapped into
+       the view while IndexedDB was still opening. */
+    hydrate(deep);
+    render();
+  } else {
+    paintBadge();
+    storageWarning();
+  }
+
+  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    try {
+      await navigator.serviceWorker.register("sw.js");
+      swReady = true;
+    } catch (e) { swReady = false; }
+  }
+  if (navigator.onLine) runQueue(false);
+}
+
+/* test surface - lets a harness assert on real state instead of pixels */
+window.PC = {
+  S, tally, mergeCounts, gradesFor, buildCSV, commit, render, Store,
+  matchPlayer, teamCounts, undoLast, bump,
+  get view() { return V; },
+  go(tab, id) { V.tab = tab; V.openId = id || null; render(); },
+  _mockReader(fn) { window.__mockReader = fn; }
+};
+
+boot();
+</script>
+</body>
+</html>

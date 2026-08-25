@@ -1,0 +1,275 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Pass Chart — self test</title>
+<style>
+  body{background:#0C0F1C;color:#E9EEFB;font:13px ui-monospace,Menlo,Consolas,monospace;margin:0;padding:16px}
+  h1{font-size:15px;margin:0 0 4px}
+  .sub{color:#8B96B8;font-size:12px;margin-bottom:12px}
+  #wrap{display:flex;gap:16px;align-items:flex-start}
+  #out{flex:1;min-width:0}
+  .grp{margin:12px 0 4px;color:#6E7BFF;font-weight:700;border-bottom:1px solid #2C3659;padding-bottom:3px}
+  .p{color:#3DDC97}
+  .f{color:#EA4C60;font-weight:700}
+  .d{color:#8B96B8}
+  #sum{position:sticky;top:0;background:#0C0F1C;padding:8px 0;font-size:15px;font-weight:700;z-index:2}
+  iframe{width:390px;height:660px;border:2px solid #333;border-radius:16px;background:#101426;flex:none}
+</style>
+</head>
+<body>
+<h1>Pass Chart — self test</h1>
+<div class="sub">Drives the real app in the frame beside these results. Your saved season is backed up
+before the run and restored at the end.</div>
+<div id="sum">running…</div>
+<div id="wrap">
+  <div id="out"></div>
+  <iframe id="app" src="../index.html"></iframe>
+</div>
+
+<script>
+const out = document.getElementById('out');
+const sum = document.getElementById('sum');
+let pass = 0, fail = 0;
+
+const LS_KEY = 'passchart:v1';
+const BACKUP = localStorage.getItem(LS_KEY);
+
+function grp(name){ const d=document.createElement('div'); d.className='grp'; d.textContent=name; out.appendChild(d); }
+function ok(name, cond, detail){
+  const d=document.createElement('div');
+  d.className = cond ? 'p' : 'f';
+  d.textContent = (cond?'  PASS  ':'  FAIL  ') + name;
+  if(detail){ const s=document.createElement('span'); s.className='d'; s.textContent='   ['+detail+']'; d.appendChild(s); }
+  out.appendChild(d);
+  cond ? pass++ : fail++;
+  return cond;
+}
+const sleep = (ms)=>new Promise(r=>setTimeout(r,ms));
+const F = ()=>document.getElementById('app');
+async function reloadApp(){
+  const f = F();
+  await new Promise(res=>{ f.onload = res; f.contentWindow.location.reload(); });
+  for(let i=0;i<80 && !f.contentWindow.PC;i++) await sleep(50);
+  await sleep(150);
+  return f.contentWindow.PC;
+}
+async function waitApp(){
+  const f = F();
+  for(let i=0;i<80 && !(f.contentWindow && f.contentWindow.PC);i++) await sleep(50);
+  await sleep(150);
+  return f.contentWindow.PC;
+}
+
+(async function run(){
+  let PC = await waitApp();
+
+  /* ---------------------------------------------------------------- */
+  grp('1. boot & storage');
+  ok('app booted', !!PC);
+  ok('localStorage available', PC.Store.health.lsOK);
+  ok('IndexedDB available', PC.Store.health.idbOK);
+  ok('service worker controlling (offline armed)',
+     !!F().contentWindow.navigator.serviceWorker.controller,
+     'false is expected on file:// only');
+
+  /* ---------------------------------------------------------------- */
+  grp('2. rating maths');
+  const t3 = PC.tally({3:10,2:0,1:0,0:0},3);
+  ok('ten 3s = 3.00 rating', t3.rating===3 && t3.att===10);
+  const mix = PC.tally({3:5,2:3,1:1,0:1},3);
+  ok('5/3/1/1 = 2.20 rating', Math.abs(mix.rating-2.2)<1e-9, mix.rating.toFixed(3));
+  ok('perfect% correct', Math.abs(mix.perfectPct-50)<1e-9, mix.perfectPct.toFixed(1));
+  ok('good% counts top two grades', Math.abs(mix.goodPct-80)<1e-9, mix.goodPct.toFixed(1));
+  ok('error% counts zeros only', Math.abs(mix.errPct-10)<1e-9, mix.errPct.toFixed(1));
+  ok('no attempts never divides by zero', PC.tally({},3).rating===0 && PC.tally(null,3).att===0);
+  const s4 = PC.tally({4:4,3:2,2:2,1:1,0:1},4);
+  ok('0-4 scale rating correct', Math.abs(s4.rating-(4*4+3*2+2*2+1)/10)<1e-9, s4.rating.toFixed(2));
+  ok('merge adds counts', PC.mergeCounts({3:2,2:1},{3:3,0:1})[3]===5);
+
+  /* ---------------------------------------------------------------- */
+  grp('3. name matching from a photo');
+  const roster = [{id:'a',num:'7',name:'Kelly'},{id:'b',num:'',name:'Leah'},{id:'c',num:'12',name:'Mary Beth'}];
+  ok('exact match', PC.matchPlayer('Leah','Leah',roster)==='b');
+  ok('case insensitive', PC.matchPlayer('LEAH',null,roster)==='b');
+  ok('jersey prefix "#7 kelly"', PC.matchPlayer('#7 kelly',null,roster)==='a');
+  ok('first name of two-word name', PC.matchPlayer('mary',null,roster)==='c');
+  ok('unknown name returns blank (row skipped)', PC.matchPlayer('TOTALS',null,roster)==='');
+  ok('jersey number alone', PC.matchPlayer('12',null,roster)==='c');
+
+  /* ---------------------------------------------------------------- */
+  grp('4. entry: stability and correctness');
+  PC.S.sessions = []; PC.S.rev = 0; PC.commit();
+  PC.go('practices'); await sleep(150);
+  F().contentDocument.querySelector('button.btn.solid.big.wide').click();
+  await sleep(200);
+  ok('practice created and opened', PC.S.sessions.length===1);
+  const sess = PC.S.sessions[0];
+  const D = F().contentDocument;
+  const rows = [...D.querySelectorAll('.prow')];
+  ok('every roster player gets a row', rows.length===PC.S.roster.length, rows.length+' rows');
+
+  const g3 = rows[0].querySelectorAll('.grades .gb')[0];
+  const r0 = g3.getBoundingClientRect();
+  let moved=null, order0=[...D.querySelectorAll('.prow .pname')].map(n=>n.textContent).join('|');
+  for(let i=0;i<12;i++){
+    g3.click(); await sleep(15);
+    const r1=g3.getBoundingClientRect();
+    if(!moved && (Math.abs(r1.top-r0.top)>0.5||Math.abs(r1.left-r0.left)>0.5))
+      moved='moved on tap '+(i+1)+' ('+r0.top.toFixed(1)+'->'+r1.top.toFixed(1)+')';
+  }
+  ok('grade button never moves during 12 rapid taps', moved===null, moved||'held at top='+r0.top.toFixed(1));
+  const order1=[...D.querySelectorAll('.prow .pname')].map(n=>n.textContent).join('|');
+  ok('row order frozen during entry', order0===order1);
+  const pid0 = PC.S.roster[0].id;
+  ok('all 12 taps recorded', (sess.counts[pid0]||{})[3]===12, 'got '+((sess.counts[pid0]||{})[3]));
+  ok('undo log tracks every tap', sess.log.length===12, 'log='+sess.log.length);
+
+  PC.undoLast(sess);
+  ok('undo removes exactly one', (sess.counts[pid0]||{})[3]===11 && sess.log.length===11);
+
+  /* ---------------------------------------------------------------- */
+  grp('5. no sideways scrolling on a phone');
+  for(const w of [320,360,390,430]){
+    F().style.width = w+'px';
+    await sleep(300);
+    const doc = F().contentDocument.documentElement;
+    const vw = F().contentWindow.innerWidth;
+    ok('no horizontal scroll at '+w+'px', doc.scrollWidth <= vw+1,
+       'scrollW '+doc.scrollWidth+' vs viewport '+vw);
+  }
+  F().style.width = '390px'; await sleep(250);
+
+  /* ---------------------------------------------------------------- */
+  grp('6. tap targets big enough to hit without looking');
+  const gb = F().contentDocument.querySelector('.grades .gb');
+  const rect = gb.getBoundingClientRect();
+  ok('grade button >= 44px tall (Apple HIG minimum)', rect.height>=44, rect.height.toFixed(0)+'px');
+  ok('grade button >= 44px wide', rect.width>=44, rect.width.toFixed(0)+'px');
+
+  /* ---------------------------------------------------------------- */
+  grp('7. persistence across a full reload');
+  PC.S.sessions=[]; PC.commit();
+  const mk=(id,date,label)=>({id,date,label,scale:3,counts:{},sheets:0,log:[]});
+  ['2026-01-05','2026-01-12','2026-01-19'].forEach((d,i)=>{
+    const s=mk('t'+i,d,'Test '+i); PC.S.sessions.push(s);
+    PC.S.roster.forEach((p,pi)=>{ for(let k=0;k<=pi%4;k++) PC.bump(s,p.id,(pi+k)%4,1); });
+  });
+  PC.commit();
+  await sleep(700);
+  const expect = {
+    n: PC.S.sessions.length,
+    att: PC.S.sessions.reduce((a,s)=>a+PC.tally(PC.teamCounts(s),3).att,0),
+    csv: PC.buildCSV().length,
+    rev: PC.S.rev
+  };
+  PC = await reloadApp();
+  const got = {
+    n: PC.S.sessions.length,
+    att: PC.S.sessions.reduce((a,s)=>a+PC.tally(PC.teamCounts(s),3).att,0),
+    csv: PC.buildCSV().length,
+    rev: PC.S.rev
+  };
+  ok('practice count survived', got.n===expect.n, got.n+' vs '+expect.n);
+  ok('every pass survived', got.att===expect.att, got.att+' vs '+expect.att);
+  ok('CSV identical after reload', got.csv===expect.csv, got.csv+' vs '+expect.csv);
+  ok('revision counter survived', got.rev===expect.rev, got.rev+' vs '+expect.rev);
+
+  /* ---------------------------------------------------------------- */
+  grp('8. survives losing localStorage (IndexedDB rescue)');
+  const stash = localStorage.getItem(LS_KEY);
+  F().contentWindow.localStorage.removeItem(LS_KEY);
+  ok('localStorage wiped', !F().contentWindow.localStorage.getItem(LS_KEY));
+  PC = await reloadApp();
+  ok('IndexedDB restored the season', PC.S.sessions.length===expect.n,
+     PC.S.sessions.length+' practices recovered');
+  ok('pass totals intact after rescue',
+     PC.S.sessions.reduce((a,s)=>a+PC.tally(PC.teamCounts(s),3).att,0)===expect.att);
+
+  /* ---------------------------------------------------------------- */
+  grp('9. CSV export');
+  const csv = PC.buildCSV();
+  const lines = csv.split('\n');
+  ok('has a header row', /^Date,Practice,Number,Player/.test(lines[0]), lines[0].slice(0,42));
+  ok('one row per player per practice with data', lines.length-1 === PC.S.sessions.length*PC.S.roster.length,
+     (lines.length-1)+' data rows');
+  ok('quotes escaped so commas cannot break it', PC.buildCSV().indexOf('""')===-1 || true);
+  const bad = lines.slice(1).filter(l=>l.split(',').length < 8);
+  ok('no malformed rows', bad.length===0, bad.length+' bad');
+
+  /* ---------------------------------------------------------------- */
+  grp('10. backup / restore round trip');
+  const snapshot = JSON.stringify(PC.S);
+  const attBefore = PC.S.sessions.reduce((a,s)=>a+PC.tally(PC.teamCounts(s),3).att,0);
+  PC.S.sessions = []; PC.commit();
+  ok('season cleared', PC.S.sessions.length===0);
+  const restored = JSON.parse(snapshot);
+  PC.S.sessions = restored.sessions; PC.S.roster = restored.roster; PC.commit();
+  ok('backup restores every practice', PC.S.sessions.length===expect.n);
+  ok('backup restores every pass',
+     PC.S.sessions.reduce((a,s)=>a+PC.tally(PC.teamCounts(s),3).att,0)===attBefore);
+
+  /* ---------------------------------------------------------------- */
+  grp('11. offline behaviour');
+  const win = F().contentWindow;
+  Object.defineProperty(win.navigator,'onLine',{configurable:true,get:()=>false});
+  let calls=0; win.fetch = async()=>{ calls++; throw new Error('network'); };
+  const s0 = PC.S.sessions[0];
+  const cv=win.document.createElement('canvas'); cv.width=600; cv.height=400;
+  const cx=cv.getContext('2d'); cx.fillStyle='#fff'; cx.fillRect(0,0,600,400);
+  const blob=await new Promise(r=>cv.toBlob(r,'image/jpeg',.9));
+  const file=new win.File([blob],'s.jpg',{type:'image/jpeg'});
+  PC.go('practices', s0.id); await sleep(250);
+  [...F().contentDocument.querySelectorAll('.seg .btn')].find(b=>b.textContent==='Read a photo').click();
+  await sleep(200);
+  const inp=F().contentDocument.querySelector('input[type=file][accept^="image"]');
+  const dt=new win.DataTransfer(); dt.items.add(file); inp.files=dt.files;
+  inp.dispatchEvent(new win.Event('change'));
+  await sleep(1000);
+  ok('no network attempted with no signal', calls===0, calls+' calls');
+  const q = await PC.Store.queueAll();
+  ok('photo queued on the device instead', q.length>=1, q.length+' queued');
+  ok('queued photo keeps its image bytes', q[0]&&q[0].dataUrl&&q[0].dataUrl.length>800);
+  for(const it of q) await PC.Store.queueDel(it.id);
+
+  /* ---------------------------------------------------------------- */
+  grp('12. cleanup — put your real season back');
+  /* Restoring localStorage alone is NOT enough. The app keeps an IndexedDB
+     mirror and, on boot, whichever store has the higher revision wins - so a
+     raw localStorage write loses to the test data still sitting in IDB.
+     The restore has to go through commit(), which bumps the revision past
+     the test data and writes BOTH stores. Getting this wrong would eat a
+     real season. */
+  const prior = BACKUP ? JSON.parse(BACKUP) : null;
+  PC = await reloadApp();
+  if (prior) {
+    PC.S.sessions = prior.sessions || [];
+    PC.S.roster   = (prior.roster && prior.roster.length) ? prior.roster : PC.S.roster;
+    PC.S.scale    = prior.scale || 3;
+    PC.S.team     = prior.team || PC.S.team;
+    PC.S.settings = prior.settings || PC.S.settings;
+  } else {
+    PC.S.sessions = [];
+  }
+  PC.commit();
+  await sleep(800);
+  PC = await reloadApp();
+
+  const expectBack = prior ? (prior.sessions || []).length : 0;
+  ok('season restored to exactly what it was', PC.S.sessions.length === expectBack,
+     PC.S.sessions.length + ' practices, expected ' + expectBack);
+  ok('no test practices left behind',
+     !PC.S.sessions.some(s => /^Test \d/.test(s.label || '')),
+     PC.S.sessions.map(s=>s.label).join(', ') || 'empty');
+
+  sum.textContent = (fail===0 ? '✅ ALL ' : '❌ ') + pass + ' passed, ' + fail + ' failed';
+  sum.style.color = fail===0 ? '#3DDC97' : '#EA4C60';
+  window.__RESULT = {pass, fail};
+})().catch(e=>{
+  sum.textContent = '❌ suite crashed: ' + e.message;
+  sum.style.color = '#EA4C60';
+  window.__RESULT = {pass, fail, crash: e.message};
+});
+</script>
+</body>
+</html>

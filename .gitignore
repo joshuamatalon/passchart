@@ -1,0 +1,5 @@
+# nothing here is generated, but keep editor and OS noise out
+.DS_Store
+Thumbs.db
+*.swp
+__pycache__/
