@@ -133,10 +133,17 @@ async function waitApp(){
   for(const w of [320,360,390,430]){
     F().style.width = w+'px';
     await sleep(300);
+    /* The document no longer scrolls - main does. Checking documentElement
+       alone would now pass trivially and stop catching real overflow, so
+       measure the actual scroller too. */
     const doc = F().contentDocument.documentElement;
+    const mainEl = F().contentDocument.querySelector('main');
     const vw = F().contentWindow.innerWidth;
     ok('no horizontal scroll at '+w+'px', doc.scrollWidth <= vw+1,
        'scrollW '+doc.scrollWidth+' vs viewport '+vw);
+    ok('content does not overflow the scroller at '+w+'px',
+       !mainEl || mainEl.scrollWidth <= mainEl.clientWidth + 1,
+       mainEl ? 'main scrollW '+mainEl.scrollWidth+' vs clientW '+mainEl.clientWidth : 'no main');
   }
   F().style.width = '390px'; await sleep(250);
 
@@ -160,7 +167,41 @@ async function waitApp(){
     ok('header ribbon is 12px', Math.abs(hHdr - 12) < 1.5, hHdr.toFixed(1) + 'px');
   }
 
-  grp('7. tap targets, and no accidental zoom on a phone');
+  grp('7. phone ergonomics: a locked nav bar, tap targets, no stray zoom');
+
+  /* The reported bug: the bottom bar was cut off until you scrolled a little.
+     position:fixed;bottom:0 anchors to the LAYOUT viewport, which on iOS runs
+     behind Safari's toolbar, so the bar was drawn underneath it. It is a real
+     flex row now and cannot be overlapped or moved. */
+  {
+    const D3 = F().contentDocument, W3 = F().contentWindow;
+    const navEl = D3.querySelector('nav.tabs');
+    const mainEl = D3.querySelector('main');
+    const pos = W3.getComputedStyle(navEl).position;
+    ok('nav is a layout row, not a floating fixed bar', pos === 'static', pos);
+
+    const nr = navEl.getBoundingClientRect();
+    ok('whole nav is inside the viewport, nothing clipped',
+       nr.bottom <= W3.innerHeight + 1 && nr.top >= 0,
+       'nav ' + nr.top.toFixed(0) + '-' + nr.bottom.toFixed(0) + ' vs viewport ' + W3.innerHeight);
+    ok('nav sits flush against the bottom edge', Math.abs(nr.bottom - W3.innerHeight) < 2,
+       (W3.innerHeight - nr.bottom).toFixed(1) + 'px gap');
+
+    mainEl.scrollTop = 500;
+    await sleep(200);
+    /* if the list did not actually move, "the nav stayed put" proves nothing */
+    ok('the list really scrolled (so the next check means something)',
+       mainEl.scrollTop > 50, 'scrollTop=' + mainEl.scrollTop);
+    const nr2 = navEl.getBoundingClientRect();
+    ok('nav does not move when the list scrolls', Math.abs(nr2.top - nr.top) < 0.5,
+       'top ' + nr.top.toFixed(1) + ' -> ' + nr2.top.toFixed(1));
+    ok('only main scrolls; the page itself does not',
+       D3.documentElement.scrollHeight <= W3.innerHeight + 1,
+       'doc ' + D3.documentElement.scrollHeight + ' vs ' + W3.innerHeight);
+    mainEl.scrollTop = 0;
+    await sleep(150);
+  }
+
   const gb = F().contentDocument.querySelector('.grades .gb');
   const rect = gb.getBoundingClientRect();
   ok('grade button >= 44px tall (Apple HIG minimum)', rect.height>=44, rect.height.toFixed(0)+'px');

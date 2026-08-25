@@ -85,7 +85,20 @@
    Pinch-zoom and scrolling are untouched, so nothing is lost. */
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 html,body{margin:0;padding:0}
+html{height:100%}
+/* The app is a fixed-height flex column: header, scrolling body, then the
+   nav as a real layout row. The nav used to be position:fixed;bottom:0, which
+   anchors to the LAYOUT viewport - and on iOS that extends behind Safari's
+   bottom toolbar, so the bar was drawn underneath it and only looked right
+   once scrolling collapsed the toolbar. A flex row cannot be overlapped, and
+   100dvh tracks the toolbar as it comes and goes. 100vh first as a fallback
+   for anything that does not know dvh. */
 body{
+  height:100vh;
+  height:100dvh;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
   background:var(--bg);
   /* a barely-there wash so the ground is not a dead flat fill */
   background-image:radial-gradient(120% 60% at 50% 0%,#141926 0%,rgba(10,12,17,0) 62%);
@@ -94,13 +107,19 @@ body{
   font-family:var(--sans);
   font-size:15px;
   line-height:1.45;
-  min-height:100vh;
-  overscroll-behavior-y:contain;
+  /* NO min-height here. min-height:100vh would out-vote the dvh height the
+     moment the toolbar appears and push the nav back off-screen. */
   -webkit-user-select:none;user-select:none;
   -webkit-font-smoothing:antialiased;
   text-rendering:optimizeLegibility;
   /* stop iOS inflating type when the phone is turned sideways */
   -webkit-text-size-adjust:100%;text-size-adjust:100%;
+}
+/* the app renders into #root, so #root is the actual shell column */
+#root{
+  flex:1 1 auto;min-height:0;
+  display:flex;flex-direction:column;
+  overflow:hidden;
 }
 input,textarea,select{-webkit-user-select:text;user-select:text;font-family:inherit}
 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
@@ -130,7 +149,7 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 
 /* ---------------------------------------------------------- header --- */
 header{
-  position:sticky;top:0;z-index:20;
+  flex:none;z-index:20;
   background:rgba(10,12,17,.82);
   backdrop-filter:saturate(150%) blur(14px);
   -webkit-backdrop-filter:saturate(150%) blur(14px);
@@ -162,9 +181,21 @@ header{
            box-shadow:0 0 0 3px rgba(47,208,138,.14)}
 
 /* ---------------------------------------------------------- layout --- */
+/* main is the only thing that scrolls. min-height:0 is required - a flex
+   child defaults to min-height:auto, which refuses to shrink below its
+   content and would push the nav off the bottom again. */
 main{
-  padding:var(--s4);max-width:720px;margin:0 auto;
-  padding-bottom:calc(104px + var(--safe-b));
+  flex:1 1 auto;
+  min-height:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  width:100%;
+  padding:var(--s4);
+  padding-bottom:var(--s6);
+  max-width:720px;
+  margin:0 auto;
 }
 /* minmax(0,1fr) is load-bearing. A bare `auto` grid column sizes to
    min-content, so one nowrap child (the undo chip strip) drags every panel
@@ -355,8 +386,12 @@ label.fld{
 }
 
 /* ------------------------------------------------------------ nav --- */
+/* The last row of the flex column, not a floating bar. This is what makes it
+   genuinely locked: it is part of the layout, so nothing can draw over it and
+   it has no reason to move when the list scrolls. safe-area padding stays for
+   the iPhone home indicator. */
 nav.tabs{
-  position:fixed;bottom:0;left:0;right:0;display:flex;z-index:20;
+  flex:none;display:flex;z-index:20;
   background:rgba(15,18,25,.9);
   backdrop-filter:saturate(150%) blur(18px);
   -webkit-backdrop-filter:saturate(150%) blur(18px);
@@ -398,8 +433,11 @@ nav.tabs button.on svg{stroke-width:2.1}
 .chip.ent b{color:var(--text-2);font-weight:600}
 
 /* ------------------------------------------------- quick entry bar --- */
+/* also a real layout row now, sitting between the scroller and the nav.
+   As a fixed element it had to be offset by a hand-maintained 58px guess at
+   the nav's height, and it inherited the same overlap problem. */
 .quick{
-  position:fixed;left:0;right:0;bottom:calc(58px + var(--safe-b));z-index:19;
+  flex:none;z-index:19;
   background:rgba(19,22,29,.97);
   backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
   border-top:1px solid var(--line-2);
@@ -407,7 +445,8 @@ nav.tabs button.on svg{stroke-width:2.1}
   padding:10px var(--s3) 12px;display:none;
 }
 body.quickon .quick{display:block}
-body.quickon main{padding-bottom:calc(232px + var(--safe-b))}
+/* no main padding-bottom compensation any more - the flex column reserves
+   the space by itself, so there is no magic number to keep in sync */
 .quick .who{display:flex;align-items:center;gap:var(--s2);margin-bottom:9px}
 .quick .who .nm{font-weight:700;font-size:16px;letter-spacing:-.015em;
                 white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -720,6 +759,9 @@ async function flushNow() {
 
 /* ============================================================== VIEWS == */
 const V = { tab: "practices", openId: null };
+/* Built before body() runs, because viewSession fills it while the tree is
+   still being assembled - a querySelector at that point would find nothing. */
+let quickSlot = null;
 
 function ribbon(counts, scale, height) {
   const gs = gradesFor(scale);
@@ -806,6 +848,7 @@ function render() {
   const root = $("#root");
   root.textContent = "";
   setQuick(false);   /* viewSession re-arms it if a passer is selected */
+  quickSlot = h("div", { id: "quickslot" });
 
   const header = h("header", null,
     h("div", { class: "hrow" },
@@ -826,6 +869,10 @@ function render() {
 
   root.appendChild(header);
   root.appendChild(main);
+  /* The quick-entry bar is a sibling of main, not a child of it: it is a real
+     row in the shell column now, so its position in the DOM decides where it
+     sits. viewSession fills this slot when a passer is selected. */
+  root.appendChild(quickSlot);
   root.appendChild(nav);
   paintBadge();
   storageWarning();
@@ -1180,7 +1227,8 @@ function viewSession(s) {
   paintModes(); paintPhoto(); refreshTop(); refreshUndo(); buildList(); refreshQuick();
   wrap.appendChild(undoBar);
   wrap.appendChild(list);
-  wrap.appendChild(quick);
+  /* quick bar goes into the shell slot below main, never inside the scroller */
+  if (quickSlot) { quickSlot.textContent = ""; quickSlot.appendChild(quick); }
   return wrap;
 }
 
