@@ -3,3 +3,6 @@
 Thumbs.db
 *.swp
 __pycache__/
+
+# scratch worktrees created by background sessions
+.claude/

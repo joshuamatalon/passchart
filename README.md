@@ -168,10 +168,10 @@ python -m http.server 8777 --bind 127.0.0.1
 # then open http://127.0.0.1:8777/tools/selftest.html
 ```
 
-50 assertions driving the real app in a frame: rating maths, name matching, tap
-stability, no sideways scroll at 320/360/390/430 px, tap-target sizes, persistence
-across a reload, IndexedDB rescue after a localStorage wipe, CSV shape, backup round
-trip, and the offline photo queue.
+53 assertions driving the real app in a frame: rating maths, name matching, tap
+stability, no sideways scroll at 320/360/390/430 px, ribbon heights, tap-target sizes,
+persistence across a reload, IndexedDB rescue after a localStorage wipe, CSV shape,
+backup round trip, and the offline photo queue.
 
 It backs your season up before it runs and restores it afterwards **through the app's
 own save path** — restoring localStorage alone is not enough, because the IndexedDB
